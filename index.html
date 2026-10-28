@@ -193,6 +193,12 @@ nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:re
 .acct-line{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font-size:14px}
 .you{font-size:11px;font-weight:700;color:var(--pine);background:var(--pine-soft);padding:1px 8px;border-radius:99px;margin-inline-start:6px}
 .link-list{display:grid;gap:8px}
+.qrbox{background:#fff;border-radius:18px;padding:14px;justify-self:center;width:min(100%,280px);min-height:120px;display:grid;place-items:center}
+.qrbox svg{display:block;width:100%;height:auto}
+.scanbox{position:relative;border-radius:18px;overflow:hidden;background:#000;aspect-ratio:1/1;width:100%}
+.scanbox video{width:100%;height:100%;object-fit:cover;display:block}
+.scanframe{position:absolute;inset:16%;border:3px solid #fff;border-radius:18px;box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none}
+.money-btns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
 #toast{position:fixed;z-index:60;bottom:calc(84px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;max-width:calc(100% - 32px);text-align:center}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
 </style>
@@ -200,7 +206,7 @@ nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:re
 <body>
 <div id="app" dir="rtl" lang="ar">
   <header class="top">
-    <h1 class="brand">صندوق العائلة<small id="sub">دفتر مشترك بلا ربا · إصدار 4</small></h1>
+    <h1 class="brand">صندوق العائلة<small id="sub">دفتر مشترك بلا ربا · إصدار 5</small></h1>
     <button class="chip-link" data-act="logout" id="logoutBtn" hidden>خروج</button>
   </header>
   <main id="view"></main>
@@ -224,14 +230,14 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 import { firebaseConfig } from "./config.js";
 (function(){
 "use strict";
-var S={members:[],tx:[],deals:[],dists:[],notes:[],loaded:{},tab:"home",filter:"all",noDb:false,writable:true,uid:null,email:null,authed:null,setup:false,denied:false,denyWhat:"",settings:null};
+var S={members:[],tx:[],deals:[],dists:[],notes:[],loaded:{},tab:"home",filter:"all",noDb:false,writable:true,uid:null,email:null,authed:null,setup:false,denied:false,denyWhat:"",settings:null,seenTx:{},bootAt:Date.now()};
 function myMember(){return S.uid?S.members.find(function(m){return m.uid===S.uid})||null:null}
 function myId(){var m=myMember();return m?m.id:null}
 function acctNo(m){return String(m&&m.order||0).padStart(4,"0")}
 function isAdmin(){return !!(S.settings&&S.uid&&S.settings.adminUid===S.uid)}
 var db=null;
 var COLS=["members","tx","deals","dists","notes"];
-var TX={deposit:{l:"إيداع",s:1},withdraw:{l:"سحب",s:-1},qard_out:{l:"قرض حسن",s:-1},qard_in:{l:"سداد قرض",s:1},murabaha_buy:{l:"شراء مرابحة",s:-1},murabaha_pay:{l:"قسط مرابحة",s:1},mudaraba_out:{l:"تمويل مضاربة",s:-1},mudaraba_close:{l:"إغلاق مضاربة",s:1}};
+var TX={deposit:{l:"إيداع",s:1},withdraw:{l:"سحب",s:-1},qard_out:{l:"قرض حسن",s:-1},qard_in:{l:"سداد قرض",s:1},murabaha_buy:{l:"شراء مرابحة",s:-1},transfer:{l:"تحويل",s:0},murabaha_pay:{l:"قسط مرابحة",s:1},mudaraba_out:{l:"تمويل مضاربة",s:-1},mudaraba_close:{l:"إغلاق مضاربة",s:1}};
 var KIND={qard:"قرض حسن",murabaha:"مرابحة",mudaraba:"مضاربة"};
 
 function $(s){return document.querySelector(s)}
@@ -261,7 +267,7 @@ function dealStat(d){
 function calc(){
   var bal={};S.members.forEach(function(m){bal[m.id]={dep:0,wd:0,dist:0}});
   var cash=0,profit=0;
-  S.tx.forEach(function(t){cash+=cashOf(t);profit+=(+t.profit||0);if(bal[t.member]){if(t.type==="deposit")bal[t.member].dep+=(+t.amount);if(t.type==="withdraw")bal[t.member].wd+=(+t.amount)}});
+  S.tx.forEach(function(t){cash+=cashOf(t);profit+=(+t.profit||0);if(t.type==="transfer"){if(bal[t.member])bal[t.member].wd+=(+t.amount);if(bal[t.to])bal[t.to].dep+=(+t.amount)}if(bal[t.member]){if(t.type==="deposit")bal[t.member].dep+=(+t.amount);if(t.type==="withdraw")bal[t.member].wd+=(+t.amount)}});
   var distributed=0;S.dists.forEach(function(d){distributed+=(+d.total||0);var a=d.alloc||{};Object.keys(a).forEach(function(k){if(bal[k])bal[k].dist+=(+a[k])})});
   var deals=S.deals.map(dealStat);
   var recv=deals.reduce(function(s,o){return s+o.outCost},0);
@@ -317,10 +323,11 @@ function vMine(c){
   var me=myMember(),x=c.members.find(function(y){return y.m.id===me.id})||{balance:0,share:0,dist:0};
   var mine=c.deals.filter(function(o){return o.d.member===me.id}),open=mine.filter(function(o){return o.open});
   var owed=open.filter(function(o){return o.d.kind!=="mudaraba"}).reduce(function(s,o){return s+o.remaining},0);
-  var txs=sortedTx().filter(function(t){return t.member===me.id});
+  var txs=sortedTx().filter(function(t){return t.member===me.id||t.to===me.id});
   var h='<section class="card" aria-label="بطاقة حسابك"><div class="top"><span class="bank">بنك الثامر</span><span>حساب رقم <span class="num">'+acctNo(me)+'</span></span></div>'+
     '<div><div class="lbl">رصيدك</div><div class="big">'+money(x.balance)+'<span class="cur">ج.م</span></div></div>'+
     '<div class="foot"><div><div class="lbl">صاحب الحساب</div><div class="holder">'+esc(me.name)+(isAdmin()?' · المدير':'')+'</div></div><div style="text-align:end"><div class="lbl">حصتك من الصندوق</div><div class="holder">'+pct(x.share)+'</div></div></div></section>';
+  h+='<div class="money-btns"><button class="btn" data-act="transfer">تحويل</button><button class="btn ghost" data-act="receive">استلام برمز QR</button></div>';
   h+='<div class="acts">'+actBtn("deposit","إيداع",'<path d="M12 4v12M7 11l5 5 5-5M5 20h14"/>')+actBtn("withdraw","سحب",'<path d="M12 20V8M7 13l5-5 5 5M5 4h14"/>')+
     actBtn("murabaha","شراء بالتقسيط",'<path d="M5 7h14l-1.5 9h-11z"/><path d="M9 7a3 3 0 0 1 6 0"/>')+actBtn("qard","قرض حسن",'<path d="M4 12h16M12 4v16"/><circle cx="12" cy="12" r="9"/>')+actBtn("mudaraba","مشروع",'<path d="M4 18l5-6 4 3 7-9"/><path d="M15 6h5v5"/>')+'</div>';
   h+='<div class="kpis" style="margin-top:12px"><div class="kpi"><div class="k">عليك للصندوق</div><div class="v">'+money(owed)+'</div><div class="s">أقساط وقروض باقية</div></div>'+
@@ -358,6 +365,8 @@ function vFund(c){
 }
 
 function txRow(t){
+  if(t.type==="transfer"){var mi=myId(),dir=t.to===mi?1:t.member===mi?-1:0;
+    return '<button class="item" data-act="open-tx" data-id="'+esc(t.id)+'"><div class="t">'+(dir>0?"تحويل وارد":dir<0?"تحويل صادر":"تحويل")+'</div><div class="a '+(dir>0?"plus":dir<0?"minus":"")+'">'+(dir>0?"+":dir<0?"−":"")+money(t.amount)+'</div><div class="d">'+esc(nameOf(t.member)+" ← "+nameOf(t.to))+' · '+esc(fdate(t.date))+(t.note?" · "+esc(t.note):"")+'</div></button>'}
   var cash=cashOf(t),sign=cash>=0?"plus":"minus";
   var sub=nameOf(t.member)+" · "+fdate(t.date)+(t.note?" · "+t.note:"");
   return '<button class="item" data-act="open-tx" data-id="'+esc(t.id)+'"><div class="t">'+esc(TX[t.type]?TX[t.type].l:t.type)+(t.receipt?'<span class="clip">فاتورة</span>':'')+'</div><div class="a '+sign+'">'+(cash>=0?"+":"−")+money(Math.abs(cash))+'</div><div class="d">'+esc(sub)+'</div></button>';
@@ -366,7 +375,7 @@ function sortedTx(){return S.tx.slice().sort(function(a,b){return String(b.date)
 function vLedger(c){
   var chips=[["all","الكل"]].concat(myMember()?[["mine","عملياتي"]]:[]).concat([["receipts","بفاتورة"]]).concat(sortedMembers().map(function(m){return [m.id,m.name]}));
   var h='<h2 class="sec">العمليات<span class="aside">'+S.tx.length+' عملية</span></h2><div class="chips" role="group" aria-label="تصفية">'+chips.map(function(x){return '<button class="chip" data-act="filter" data-id="'+esc(x[0])+'" aria-pressed="'+(S.filter===x[0])+'">'+esc(x[1])+'</button>'}).join("")+'</div>';
-  var list=sortedTx().filter(function(t){return S.filter==="all"?true:S.filter==="receipts"?!!t.receipt:S.filter==="mine"?t.member===myId():t.member===S.filter});
+  var list=sortedTx().filter(function(t){return S.filter==="all"?true:S.filter==="receipts"?!!t.receipt:S.filter==="mine"?(t.member===myId()||t.to===myId()):(t.member===S.filter||t.to===S.filter)});
   if(!list.length)return h+'<div class="empty" style="margin-top:10px"><p>'+(S.tx.length?"لا عمليات تطابق هذا الاختيار.":"لم تُسجَّل أي عملية بعد. ابدأ بإيداع لكل عضو.")+'</p>'+(S.tx.length||!S.writable?"":'<button class="btn" data-act="add">تسجيل أول إيداع</button>')+'</div>';
   return h+'<div class="list" style="margin-top:10px">'+list.map(txRow).join("")+'</div>';
 }
@@ -503,7 +512,7 @@ function vStats(c){
 /* ---------- sheets ---------- */
 var sheetState={};
 function openSheet(html){$("#sheetRoot").innerHTML='<div class="scrim" data-act="close-scrim"><div class="sheet" role="dialog" aria-modal="true"><div class="grip"></div>'+html+'</div></div>';var f=$("#sheetRoot input:not([type=file]),#sheetRoot select");if(f&&window.matchMedia("(hover:hover)").matches)f.focus()}
-function closeSheet(){$("#sheetRoot").innerHTML="";sheetState={}}
+function closeSheet(){stopScan();$("#sheetRoot").innerHTML="";sheetState={}}
 function memberSelect(id,sel){return '<div class="field"><label for="'+id+'">العضو</label><select id="'+id+'">'+sortedMembers().map(function(m){return '<option value="'+esc(m.id)+'"'+(m.id===sel?" selected":"")+'>'+esc(m.name)+'</option>'}).join("")+'</select></div>'}
 function receiptField(id){return '<div class="field"><label for="'+id+'">صورة الفاتورة أو الإيصال (اختياري)</label><input id="'+id+'" type="file" accept="image/*"></div>'}
 function showMsg(el,html){if(!el)return;el.innerHTML=html;try{el.scrollIntoView({block:"center",behavior:"smooth"})}catch(e){el.scrollIntoView()}}
@@ -569,8 +578,8 @@ function compressImage(file){return new Promise(function(res,rej){var url=URL.cr
 
 function openTx(id){
   var t=S.tx.find(function(x){return x.id===id});if(!t)return;
-  var cash=cashOf(t);sheetState={kind:"tx",id:id,confirm:false};
-  var h='<h3>'+esc(TX[t.type]?TX[t.type].l:t.type)+'</h3><dl class="kv"><dt>المبلغ</dt><dd class="'+(cash>=0?"plus":"minus")+'"><b>'+(cash>=0?"+":"−")+money(Math.abs(cash))+' ج.م</b></dd><dt>العضو</dt><dd>'+esc(nameOf(t.member))+'</dd><dt>التاريخ</dt><dd>'+esc(fdate(t.date))+'</dd>'+
+  var cash=t.type==="transfer"?(t.to===myId()?+t.amount:-t.amount):cashOf(t);sheetState={kind:"tx",id:id,confirm:false};
+  var h='<h3>'+esc(TX[t.type]?TX[t.type].l:t.type)+'</h3><dl class="kv"><dt>المبلغ</dt><dd class="'+(cash>=0?"plus":"minus")+'"><b>'+(cash>=0?"+":"−")+money(Math.abs(cash))+' ج.م</b></dd><dt>'+(t.type==="transfer"?"من":"العضو")+'</dt><dd>'+esc(nameOf(t.member))+'</dd>'+(t.type==="transfer"?'<dt>إلى</dt><dd>'+esc(nameOf(t.to))+'</dd>':'')+'<dt>التاريخ</dt><dd>'+esc(fdate(t.date))+'</dd>'+
     (t.profit?'<dt>ربح الصندوق</dt><dd>'+money(t.profit)+'</dd>':'')+(t.type==="mudaraba_close"?'<dt>حصيلة البيع</dt><dd>'+money(t.amount)+'</dd><dt>نصيب العامل</dt><dd>'+money(t.workerProfit||0)+'</dd>':'')+
     (t.note?'<dt>ملاحظة</dt><dd>'+esc(t.note)+'</dd>':'')+'<dt>سجّلها</dt><dd id="byName">…</dd></dl>'+
     (t.receipt?'<img class="receipt" id="rcptImg" alt="صورة الفاتورة" hidden><p class="small muted" id="rcptMsg">جارٍ تحميل الفاتورة…</p>':'');
@@ -634,9 +643,69 @@ async function delDeal(){
   if(ok){closeSheet();toast("حُذف العقد")}
 }
 
+/* ---------- transfers & QR ---------- */
+var SCAN={stream:null,raf:0};
+function loadScript(urls){return new Promise(function(res,rej){var i=0;(function next(){if(i>=urls.length)return rej(new Error("load"));var sc=document.createElement("script");sc.src=urls[i++];sc.onload=function(){res()};sc.onerror=function(){sc.remove();next()};document.head.appendChild(sc)})()})}
+function ensureQRGen(){return window.makeQR?Promise.resolve():loadScript(["lib/qrgen.js"])}
+function ensureJsQR(){return window.jsQR?Promise.resolve():loadScript(["https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js","https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"])}
+function qrSvg(text){var q=window.makeQR(text),n=q.count,m=4,sz=n+m*2,d="";for(var r=0;r<n;r++)for(var c=0;c<n;c++)if(q.isDark(r,c))d+="M"+(c+m)+" "+(r+m)+"h1v1h-1z";return '<svg viewBox="0 0 '+sz+' '+sz+'" shape-rendering="crispEdges" role="img" aria-label="رمز الاستلام"><rect width="'+sz+'" height="'+sz+'" fill="#fff"/><path d="'+d+'" fill="#000"/></svg>'}
+function payText(id,amount){return "BOT-PAY:"+id+(amount>0?":"+r2(amount):"")}
+function parsePay(t){var m=/^BOT-PAY:([A-Za-z0-9_-]+)(?::([0-9.]+))?$/.exec(String(t||"").trim());return m?{to:m[1],amount:m[2]?+m[2]:0}:null}
+function openReceive(){
+  var me=myMember();if(!me){toast("اربط حسابك أولاً");return}
+  sheetState={kind:"receive"};
+  openSheet('<h3>استلام تحويل</h3><p class="small muted" style="margin:0">اطلب من أخيك أن يضغط «تحويل» ثم «امسح رمز المستلم»، ويوجّه كاميرا هاتفه إلى هذا الرمز.</p><div class="qrbox" id="qrBox"><span class="small" style="color:#555">جارٍ تجهيز الرمز…</span></div><div class="acct-line" style="text-align:center">إلى حساب <b>'+esc(me.name)+'</b> · رقم <span class="num">'+acctNo(me)+'</span></div><div class="field"><label for="rc-amount">المبلغ المطلوب (اختياري)</label><input id="rc-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="اتركه فارغاً ليكتبه المرسل"></div><button class="btn ghost block" data-act="close">إغلاق</button>');
+  ensureQRGen().then(drawReceiveQR).catch(function(){var b=$("#qrBox");if(b)b.innerHTML='<p class="small err">تعذر تجهيز الرمز. حدّث الصفحة وحاول مرة أخرى.</p>'});
+}
+function drawReceiveQR(){var b=$("#qrBox"),me=myMember();if(!b||!me||!window.makeQR)return;b.innerHTML=qrSvg(payText(me.id,numv("rc-amount")))}
+function openTransfer(pre){
+  var me=myMember();if(!me){toast("اربط حسابك أولاً");return}
+  var others=sortedMembers().filter(function(m){return m.id!==me.id});if(!others.length){toast("لا يوجد عضو آخر للتحويل إليه");return}
+  pre=pre||{};sheetState={kind:"transfer",confirm:false};
+  var c=calc(),x=c.members.find(function(y){return y.m.id===me.id});
+  openSheet('<h3>تحويل من حسابك</h3><div class="acct-line">رصيدك المتاح <b>'+money(x?x.balance:0)+' ج.م</b></div><button class="btn ghost block" data-act="scan">امسح رمز المستلم بالكاميرا</button>'+
+   '<form id="trForm" class="stack" novalidate><div class="field"><label for="tr-to">إلى</label><select id="tr-to">'+others.map(function(m){return '<option value="'+esc(m.id)+'"'+(m.id===pre.to?" selected":"")+'>'+esc(m.name)+' · حساب '+acctNo(m)+'</option>'}).join("")+'</select></div>'+
+   '<div class="field"><label for="tr-amount">المبلغ (ج.م)</label><input id="tr-amount" type="text" inputmode="decimal" autocomplete="off" value="'+(pre.amount>0?esc(pre.amount):"")+'"></div>'+
+   '<div class="field"><label for="tr-note">ملاحظة</label><input id="tr-note" type="text"></div><div id="trMsg"></div>'+
+   '<div class="btns"><button type="submit" class="btn" id="trSubmit">متابعة</button><button type="button" class="btn ghost" data-act="close">إلغاء</button></div></form>');
+  if(pre.to)toast("تعرّفنا على حساب "+nameOf(pre.to));
+  if(pre.to&&pre.amount>0)setTimeout(function(){var b=$("#trSubmit");if(b)b.click()},60);
+}
+async function submitTransfer(ev){
+  ev.preventDefault();var me=myMember();if(!me)return;
+  var to=val("tr-to"),amount=r2(numv("tr-amount")),note=val("tr-note").trim(),msg=$("#trMsg"),c=calc(),btn=$("#trSubmit");
+  function err(x){showMsg(msg,'<p class="err">'+esc(x)+'</p>');toast(x)}
+  var mx=c.members.find(function(y){return y.m.id===me.id}),bal=mx?mx.balance:0;
+  if(!to||to===me.id||!S.members.some(function(m){return m.id===to}))return err("اختر المستلم.");
+  if(!(amount>0))return err("اكتب مبلغاً أكبر من صفر.");
+  if(amount>bal+0.004)return err("رصيدك "+NF.format(bal)+" ج.م، ولا يمكن تحويل أكثر منه.");
+  if(!sheetState.confirm){sheetState.confirm=true;showMsg(msg,'<div class="preview"><div class="row"><span class="muted">ستحوّل</span><b>'+money(amount)+' ج.م</b></div><div class="row"><span class="muted">إلى</span><b>'+esc(nameOf(to))+'</b></div><div class="row"><span class="muted">رصيدك بعد التحويل</span><b>'+money(bal-amount)+' ج.م</b></div></div>');btn.textContent="تأكيد التحويل";return}
+  btn.disabled=true;btn.textContent="جارٍ التحويل…";
+  var ok=await w(function(){return db.collection("tx").add({type:"transfer",member:me.id,to:to,amount:amount,date:today(),note:note,by:S.email||null,createdAt:Date.now()})});
+  if(ok){closeSheet();toast("حُوّل "+NF.format(amount)+" ج.م إلى "+nameOf(to))}else{btn.disabled=false;btn.textContent="تأكيد التحويل"}
+}
+function openScan(){
+  sheetState={kind:"scan"};
+  openSheet('<h3>امسح رمز المستلم</h3><div class="scanbox"><video id="scanVideo" playsinline muted autoplay></video><div class="scanframe"></div></div><p class="small muted" id="scanMsg" style="margin:0">وجّه الكاميرا إلى الرمز الظاهر على هاتف المستلم.</p><button class="btn ghost block" data-act="transfer">رجوع واختيار المستلم من القائمة</button>');
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){scanFail("الكاميرا غير متاحة هنا. اختر المستلم من القائمة.");return}
+  Promise.all([ensureJsQR(),navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false})]).then(function(r){
+    var stream=r[1];if(sheetState.kind!=="scan"){stream.getTracks().forEach(function(t){t.stop()});return}
+    SCAN.stream=stream;var v=$("#scanVideo");v.srcObject=stream;var pl=v.play();if(pl&&pl.catch)pl.catch(function(){});
+    var cv=document.createElement("canvas"),cx=cv.getContext("2d",{willReadFrequently:true});
+    (function tick(){if(sheetState.kind!=="scan")return;
+      if(v.readyState>=2&&v.videoWidth){var W=Math.min(640,v.videoWidth),H=Math.round(v.videoHeight*W/v.videoWidth);cv.width=W;cv.height=H;cx.drawImage(v,0,0,W,H);var im=cx.getImageData(0,0,W,H),code=window.jsQR(im.data,W,H,{inversionAttempts:"dontInvert"});
+        if(code&&code.data){var p=parsePay(code.data);
+          if(p){stopScan();if(p.to===myId()){toast("هذا رمز حسابك أنت");return openTransfer()}if(!S.members.some(function(m){return m.id===p.to})){toast("الرمز لا يخص أي حساب في الصندوق");return openTransfer()}return openTransfer(p)}
+          var sm=$("#scanMsg");if(sm)sm.textContent="هذا ليس رمز استلام من صندوق العائلة."}}
+      SCAN.raf=requestAnimationFrame(tick)})();
+  }).catch(function(e){scanFail(e&&e.name==="NotAllowedError"?"لم يُسمح باستعمال الكاميرا. اسمح بها من إعدادات الآيفون، أو اختر المستلم من القائمة.":e&&e.message==="load"?"تعذر تحميل قارئ الرموز. تحقق من الإنترنت، أو اختر المستلم من القائمة.":"تعذر فتح الكاميرا. اختر المستلم من القائمة.")});
+}
+function scanFail(x){var m=$("#scanMsg");if(m){m.textContent=x;m.className="small err"}}
+function stopScan(){cancelAnimationFrame(SCAN.raf);if(SCAN.stream){SCAN.stream.getTracks().forEach(function(t){t.stop()});SCAN.stream=null}}
+
 function openMemberSheet(id){
   var c=calc(),x=c.members.find(function(y){return y.m.id===id});if(!x)return;sheetState={kind:"member-view",id:id,confirm:false};
-  var txs=sortedTx().filter(function(t){return t.member===id});
+  var txs=sortedTx().filter(function(t){return t.member===id||t.to===id});
   var h='<h3>'+esc(x.m.name)+'</h3><dl class="kv"><dt>الرصيد</dt><dd><b>'+money(x.balance)+' ج.م</b></dd><dt>الحصة</dt><dd>'+pct(x.share)+'</dd><dt>أرباح موزعة</dt><dd>'+money(x.dist)+'</dd><dt>العمليات</dt><dd><span class="num">'+txs.length+'</span></dd></dl>';
   if(txs.length)h+='<div class="list">'+txs.slice(0,8).map(txRow).join("")+'</div>';
   h=h.replace('<dl class="kv">','<p class="small muted" style="margin:0">حساب رقم <span class="num">'+acctNo(x.m)+'</span> · '+(x.m.uid?'مربوط بصاحبه':'غير مربوط بأي بريد')+'</p><dl class="kv">');
@@ -650,7 +719,7 @@ async function delMember(){
   var id=sheetState.id,m=S.members.find(function(x){return x.id===id});if(!m)return closeSheet();
   if(!sheetState.confirm){sheetState.confirm=true;document.querySelector('[data-act="del-member"]').textContent="تأكيد حذف "+m.name;return}
   var deals=S.deals.filter(function(d){return d.member===id}).map(function(d){return d.id});
-  var txs=S.tx.filter(function(t){return t.member===id||(t.deal&&deals.indexOf(t.deal)>=0)});
+  var txs=S.tx.filter(function(t){return t.member===id||t.to===id||(t.deal&&deals.indexOf(t.deal)>=0)});
   var ops=[db.doc("members/"+id).delete()];
   txs.forEach(function(t){ops.push(db.doc("tx/"+t.id).delete());if(t.receipt)ops.push(db.doc("receipts/"+t.receipt).delete())});
   deals.forEach(function(d){ops.push(db.doc("deals/"+d).delete())});
@@ -743,6 +812,9 @@ document.addEventListener("click",function(e){
   if(a==="open-member"){if(id===myId()){S.tab="home";render();window.scrollTo(0,0);return}return openMemberSheet(id)}
   if(a==="link-me"){var lm=S.members.find(function(m){return m.id===id});if(!lm||lm.uid){toast("هذا الحساب مربوط مسبقاً");return}
     w(function(){return db.doc("members/"+id).update({uid:S.uid,email:S.email||""})}).then(function(ok){if(ok){S.tab="home";toast("أهلاً "+lm.name+"، هذا حسابك الآن")}});return}
+  if(a==="transfer"){stopScan();return openTransfer()}
+  if(a==="receive")return openReceive();
+  if(a==="scan"){if(!myMember())return;return openScan()}
   if(a==="browse"){S.browse=true;S.tab="fund";render();return}
   if(a==="my-ledger"){S.filter="mine";S.tab="ledger";render();window.scrollTo(0,0);return}
   if(a==="unlink-member"){if(!isAdmin())return;var um=sheetState.id;w(function(){return db.doc("members/"+um).update({uid:null,email:null})}).then(function(ok){if(ok){closeSheet();toast("فُكّ ربط الحساب")}});return}
@@ -761,6 +833,7 @@ document.addEventListener("submit",function(e){
   if(id==="memForm")return submitMember(e);
   if(id==="noteForm")return submitNote(e);
   if(id==="goalForm")return submitGoal(e);
+  if(id==="trForm")return submitTransfer(e);
   if(id==="loginForm"){e.preventDefault();var b=$("#loginBtn");b.disabled=true;b.textContent="جارٍ الدخول…";
     signInWithEmailAndPassword(AUTH,val("l-email").trim(),val("l-pass")).catch(function(er){var c=er&&er.code;b.disabled=false;b.textContent="دخول";
       showMsg($("#loginMsg"),'<p class="err">'+(c==="auth/network-request-failed"?"لا يوجد اتصال بالإنترنت.":c==="auth/too-many-requests"?"محاولات كثيرة، انتظر قليلاً ثم حاول.":"البريد أو كلمة المرور غير صحيحين.")+'</p>')});}
@@ -768,6 +841,8 @@ document.addEventListener("submit",function(e){
 document.addEventListener("input",function(e){
   if(sheetState.kind==="add"){if(sheetState.ack){sheetState.ack=false;var b=$("#addSubmit");if(b)b.textContent="حفظ";var m=$("#addMsg");if(m)m.innerHTML=""}updateMPrev()}
   if(sheetState.kind==="deal")mudPreview();
+  if(sheetState.kind==="receive"&&e.target.id==="rc-amount")drawReceiveQR();
+  if(sheetState.kind==="transfer"&&sheetState.confirm){sheetState.confirm=false;var tb=$("#trSubmit");if(tb)tb.textContent="متابعة";var tm=$("#trMsg");if(tm)tm.innerHTML=""}
 });
 document.addEventListener("keydown",function(e){if(e.key==="Escape")closeSheet()});
 document.addEventListener("pointermove",chartHover);document.addEventListener("pointerdown",chartHover);document.addEventListener("pointerleave",chartLeave,true);
@@ -783,6 +858,7 @@ function startData(){
   COLS.forEach(function(name){
     UNSUBS.push(db.collection(name).onSnapshot(function(snap){var all=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())});
       if(name==="members"){S.settings=all.find(function(x){return x.id==="__settings"})||null;all=all.filter(function(x){return x.id!=="__settings"})}
+      if(name==="tx"){var mi=myId();if(S.loaded.tx&&mi)all.forEach(function(t){if(t.type==="transfer"&&t.to===mi&&!S.seenTx[t.id]&&(t.createdAt||0)>S.bootAt)toast("وصلك "+NF.format(t.amount)+" ج.م من "+nameOf(t.member))});all.forEach(function(t){S.seenTx[t.id]=1})}
       S[name]=all;S.loaded[name]=true;render()},
       function(err){S.loaded[name]=true;render();if(err&&err.code==="permission-denied"){S.denied=true;S.denyWhat="read";render()}}));
   });
