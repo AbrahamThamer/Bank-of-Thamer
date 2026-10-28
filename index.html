@@ -207,7 +207,7 @@ import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 import { firebaseConfig } from "./config.js";
 (function(){
 "use strict";
-var S={members:[],tx:[],deals:[],dists:[],notes:[],loaded:{},tab:"home",filter:"all",noDb:false,writable:true,uid:null,email:null,authed:null,setup:false};
+var S={members:[],tx:[],deals:[],dists:[],notes:[],loaded:{},tab:"home",filter:"all",noDb:false,writable:true,uid:null,email:null,authed:null,setup:false,denied:false,denyWhat:""};
 var db=null;
 var COLS=["members","tx","deals","dists","notes"];
 var TX={deposit:{l:"إيداع",s:1},withdraw:{l:"سحب",s:-1},qard_out:{l:"قرض حسن",s:-1},qard_in:{l:"سداد قرض",s:1},murabaha_buy:{l:"شراء مرابحة",s:-1},murabaha_pay:{l:"قسط مرابحة",s:1},mudaraba_out:{l:"تمويل مضاربة",s:-1},mudaraba_close:{l:"إغلاق مضاربة",s:1}};
@@ -262,9 +262,15 @@ function render(){
   if(!S.authed){v.innerHTML=vLogin();return}
   if(!loaded()){v.innerHTML='<div class="empty" style="margin-top:20px"><p>جارٍ فتح الدفتر…</p></div>';return}
   var c=calc();
-  v.innerHTML=(S.tab==="home"?vHome(c):S.tab==="ledger"?vLedger(c):S.tab==="deals"?vDeals(c):S.tab==="stats"?vStats(c):vPlans(c))+(S.writable?"":'<p class="small muted" style="text-align:center;margin-top:18px">لديك صلاحية القراءة فقط على هذا الصندوق.</p>');
+  v.innerHTML=(S.denied?vDenied():"")+(S.tab==="home"?vHome(c):S.tab==="ledger"?vLedger(c):S.tab==="deals"?vDeals(c):S.tab==="stats"?vStats(c):vPlans(c));
 }
 
+function vDenied(){
+  return '<div class="callout" role="alert" style="margin-bottom:14px"><b>Firebase رفض '+(S.denyWhat==="read"?"قراءة":"حفظ")+' البيانات، فلن يُحفظ شيء حتى تُصلَح القواعد.</b>'+
+  '<div class="small">أنت داخل بحساب: <span class="num" style="font-weight:700">'+esc(S.email||"")+'</span></div>'+
+  '<div class="small">الحل: في Firebase افتح Firestore Database ثم تبويب Rules، والصق القواعد الجديدة التي أرسلها لك Claude، واضغط Publish. ثم اضغط الزر هنا.</div>'+
+  '<button class="btn" data-act="retry">أعد المحاولة</button></div>';
+}
 function vLogin(){
   return '<form id="loginForm" class="panel stack" style="margin-top:24px" novalidate><h2 class="sec" style="margin:0">تسجيل الدخول</h2><p class="small muted" style="margin:0">ادخل بالبريد وكلمة المرور اللذين أنشأهما لك مدير الصندوق.</p>'+
   '<div class="field"><label for="l-email">البريد الإلكتروني</label><input id="l-email" type="email" autocomplete="username" dir="ltr"></div>'+
@@ -272,15 +278,15 @@ function vLogin(){
   '<div id="loginMsg"></div><button type="submit" class="btn block" id="loginBtn">دخول</button><button type="button" class="chip" data-act="reset-pass" style="justify-self:center">نسيت كلمة المرور</button></form>';
 }
 function vHome(c){
-  if(!S.members.length){
-    return '<div class="empty" style="margin-top:12px"><p>ابدأ بإضافة أعضاء الصندوق، ثم سجّل أول إيداع لكل منهم.</p><button class="btn" data-act="add-member">إضافة عضو</button></div>';
-  }
   var reserveNeed=c.equity*0.2,reserveOk=c.cash>=reserveNeed-0.004;
   var h='<section class="ledger-head" aria-label="ملخص الصندوق"><div><div class="lbl">رصيد الصندوق</div><div class="big">'+money(c.equity)+'<span class="cur">ج.م</span></div></div>'+
     '<div class="trio"><div><div class="v">'+money(c.cash)+'</div><div class="k">نقد متاح</div></div><div><div class="v">'+money(c.recv)+'</div><div class="k">لدى الأعضاء</div></div><div><div class="v">'+money(c.undist)+'</div><div class="k">ربح لم يُوزَّع</div></div></div></section>';
   h+='<div class="panel stack" style="margin-top:12px"><div class="row small"><span>الاحتياطي النقدي (20٪)</span><span class="badge '+(reserveOk?"good":"warn")+'">'+(reserveOk?"مكتمل":"ناقص")+'</span></div>'+
      '<div class="meter'+(reserveOk?"":" warn")+'"><i style="width:'+(reserveNeed>0?Math.min(100,c.cash/reserveNeed*100):100)+'%"></i></div>'+
      '<div class="row small muted"><span>المتاح '+money(c.cash)+'</span><span>المطلوب '+money(reserveNeed)+'</span></div></div>';
+  if(!S.members.length){
+    return h+'<h2 class="sec">الأعضاء والحصص</h2><div class="empty"><p>الصندوق بلا أعضاء بعد. أضف الإخوة بضغطة واحدة، ثم سجّل أول إيداع لكل واحد من زر +.</p><div class="btns" style="width:100%"><button class="btn" data-act="seed-members" id="seedBtn">إضافة إبراهيم ومريم وزينب</button><button class="btn ghost" data-act="add-member">إضافة عضو آخر</button></div></div>';
+  }
   h+='<h2 class="sec">الأعضاء والحصص<button class="chip" data-act="add-member">+ عضو</button></h2><div class="panel">';
   h+='<div class="shares" aria-hidden="true">'+c.members.filter(function(x){return x.share>0}).map(function(x){return '<span style="flex:'+x.share+';background:'+colorOf(x.m.id)+'"></span>'}).join("")+'</div>';
   h+=c.members.map(function(x){return '<div class="member"><span class="dot" style="background:'+colorOf(x.m.id)+'"></span><div><div class="nm">'+esc(x.m.name)+'</div><div class="sub">حصته '+pct(x.share)+(x.dist?' · أرباح موزعة '+money(x.dist):'')+'</div></div><div class="bal"><b>'+money(x.balance)+'</b><div class="sub">ج.م</div></div></div>'}).join("")+'</div>';
@@ -624,13 +630,14 @@ async function delNote(){if(!sheetState.confirm){sheetState.confirm=true;documen
 
 /* ---------- plumbing ---------- */
 function writeFailed(e){var c=e&&e.code;
-  if(c==="permission-denied"){S.writable=false;toast("حسابك غير مسموح له بالكتابة. أضف بريدك إلى قواعد Firestore");render()}
+  if(c==="permission-denied"){S.denied=true;S.denyWhat="write";render();window.scrollTo(0,0);toast("Firebase رفض الحفظ، انظر التنبيه أعلى الصفحة")}
   else if(c==="resource-exhausted")toast("تجاوزتم حد الاستخدام المجاني اليومي، حاولوا غداً");
   else toast("تعذر الحفظ: "+(c||"خطأ غير معروف"))}
 async function w(fn){
   if(!db){toast("الصندوق غير متصل");return false}
   try{var p=Promise.resolve().then(fn);var res=await Promise.race([p.then(function(){return "ok"}),new Promise(function(r){setTimeout(function(){r("queued")},1500)})]);
-    if(res==="queued"){p.catch(writeFailed);if(!navigator.onLine)toast("حُفظ على الجهاز، وسيُرفع عند عودة الإنترنت")}return true}
+    if(res==="ok"&&S.denied){S.denied=false;render()}
+    if(res==="queued"){p.then(function(){if(S.denied){S.denied=false;render()}}).catch(writeFailed);if(!navigator.onLine)toast("حُفظ على الجهاز، وسيُرفع عند عودة الإنترنت")}return true}
   catch(e){writeFailed(e);return false}
 }
 var toastT;function toast(s){var t=$("#toast");t.textContent=s;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},2600)}
@@ -656,6 +663,9 @@ document.addEventListener("click",function(e){
   if(a==="open-note")return openNote(id);
   if(a==="toggle-note")return toggleNote();
   if(a==="del-note")return delNote();
+  if(a==="retry"){S.denied=false;startData();render();toast("جارٍ إعادة الاتصال…");return}
+  if(a==="seed-members"){var sb=$("#seedBtn");if(sb){sb.disabled=true;sb.textContent="جارٍ الإضافة…"}
+    w(function(){return Promise.all(["إبراهيم","مريم","زينب"].map(function(n,i){return db.collection("members").add({name:n,order:i+1,createdAt:Date.now()})}))}).then(function(ok){if(ok)toast("أُضيف الأعضاء الثلاثة");else if(sb){sb.disabled=false;sb.textContent="إضافة إبراهيم ومريم وزينب"}});return}
   if(a==="logout"){closeSheet();stopData();signOut(AUTH);return}
   if(a==="reset-pass"){var em=val("l-email").trim();if(!em){showMsg($("#loginMsg"),'<p class="err">اكتب بريدك أولاً.</p>');return}sendPasswordResetEmail(AUTH,em).then(function(){toast("أُرسل رابط تغيير كلمة المرور إلى بريدك")}).catch(function(){toast("تعذر الإرسال، تحقق من البريد")});return}
 });
@@ -687,7 +697,7 @@ function startData(){
     doc:function(path){var p=path.split("/");return wrapRef(doc(FS,p[0],p[1]))}};
   COLS.forEach(function(name){
     UNSUBS.push(db.collection(name).onSnapshot(function(snap){S[name]=snap.docs.map(function(d){return Object.assign({id:d.id},d.data())});S.loaded[name]=true;render()},
-      function(err){S.loaded[name]=true;render();if(err&&err.code==="permission-denied")toast("حسابك غير مسموح له بقراءة الصندوق. أضف بريدك إلى قواعد Firestore")}));
+      function(err){S.loaded[name]=true;render();if(err&&err.code==="permission-denied"){S.denied=true;S.denyWhat="read";render()}}));
   });
 }
 function stopData(){UNSUBS.forEach(function(u){try{u()}catch(e){}});UNSUBS=[];COLS.forEach(function(c){S[c]=[];S.loaded[c]=false})}
