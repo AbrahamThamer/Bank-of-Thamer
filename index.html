@@ -234,7 +234,7 @@ nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:re
 <body>
 <div id="app" dir="rtl" lang="ar">
   <header class="top">
-    <h1 class="brand">صندوق العائلة<small id="sub">دفتر مشترك بلا ربا · إصدار 6</small></h1>
+    <h1 class="brand">صندوق العائلة<small id="sub">دفتر مشترك بلا ربا · إصدار 7</small></h1>
     <button class="chip-link" data-act="logout" id="logoutBtn" hidden>خروج</button>
   </header>
   <main id="view"></main>
@@ -265,7 +265,7 @@ function acctNo(m){return String(m&&m.order||0).padStart(4,"0")}
 function isAdmin(){return !!(S.settings&&S.uid&&S.settings.adminUid===S.uid)}
 var db=null;
 var COLS=["members","tx","deals","dists","notes"];
-var TX={deposit:{l:"إيداع",s:1},withdraw:{l:"سحب",s:-1},qard_out:{l:"قرض حسن",s:-1},qard_in:{l:"سداد قرض",s:1},murabaha_buy:{l:"شراء مرابحة",s:-1},transfer:{l:"تحويل",s:0},murabaha_pay:{l:"قسط مرابحة",s:1},mudaraba_out:{l:"تمويل مضاربة",s:-1},mudaraba_close:{l:"إغلاق مضاربة",s:1}};
+var TX={deposit:{l:"إيداع",s:1},withdraw:{l:"سحب",s:-1},qard_out:{l:"قرض حسن",s:-1},qard_in:{l:"سداد قرض",s:1},murabaha_buy:{l:"شراء مرابحة",s:-1},transfer:{l:"تحويل",s:0},liab_open:{l:"التزام جديد",s:0},liab_pay:{l:"سداد التزام",s:-1},murabaha_pay:{l:"قسط مرابحة",s:1},mudaraba_out:{l:"تمويل مضاربة",s:-1},mudaraba_close:{l:"إغلاق مضاربة",s:1}};
 var KIND={qard:"قرض حسن",murabaha:"مرابحة",mudaraba:"مضاربة"};
 
 function $(s){return document.querySelector(s)}
@@ -282,8 +282,88 @@ function sortedMembers(){return S.members.slice().sort(function(a,b){return (a.o
 function loaded(){return COLS.every(function(c){return S.loaded[c]})}
 function accountDay(){var now=new Date();now.setHours(0,0,0,0);for(var k=0;k<3;k++){var d=new Date(now.getFullYear(),now.getMonth()+k,1);while(d.getDay()!==5)d.setDate(d.getDate()+1);if(d>=now)return d}return now}
 function isAccountDay(){var d=accountDay(),n=new Date();n.setHours(0,0,0,0);return d.getTime()===n.getTime()}
-function cashOf(t){return t.type==="mudaraba_close"?(+t.cashIn||0):TX[t.type]?TX[t.type].s*(+t.amount||0):0}
+function cashOf(t){return t.type==="liab_open"?(t.cash?(+t.amount||0):0):t.type==="mudaraba_close"?(+t.cashIn||0):TX[t.type]?TX[t.type].s*(+t.amount||0):0}
 
+var LIAB_KINDS={loan:"قرض للصندوق",note:"كمبيالة",account:"شراء بالحساب (آجل)",other:"التزام آخر"};
+function liabStat(d){
+  var txs=S.tx.filter(function(t){return t.deal===d.id}),paid=txs.filter(function(t){return t.type==="liab_pay"}).reduce(function(s,t){return s+(+t.amount)},0);
+  var rem=r2((+d.amount||0)-paid),td=today();
+  return {d:d,txs:txs,paid:r2(paid),remaining:Math.max(0,rem),open:rem>0.004,progress:d.amount>0?Math.min(1,paid/d.amount):0,overdue:rem>0.004&&d.due&&d.due<td,soon:rem>0.004&&d.due&&d.due>=td&&daysBetween(td,d.due)<=30};
+}
+function daysBetween(a,b){return Math.round((Date.parse(b+"T12:00:00")-Date.parse(a+"T12:00:00"))/86400000)}
+function health(c){
+  var de=c.equity>0?c.L/c.equity:(c.L>0?Infinity:0),da=c.assets>0?c.L/c.assets:0,lev=c.equity>0?c.assets/c.equity:0;
+  var due30=c.liabs.filter(function(o){return o.overdue||o.soon}).reduce(function(s,o){return s+o.remaining},0);
+  var cover=due30>0?c.cash/due30:Infinity,over=c.liabs.filter(function(o){return o.overdue}).length;
+  var level=c.L<0.005?"none":(de<=0.3&&cover>=1&&!over)?"safe":(de<=0.7&&cover>=0.5)?"ok":"risk";
+  return {de:de,da:da,lev:lev,due30:r2(due30),cover:cover,over:over,level:level};
+}
+function healthCard(c){
+  var hh=health(c),lbl={none:["بلا ديون","good"],safe:["آمن","good"],ok:["مقبول، انتبهوا","warn"],risk:["خطر","bad"]}[hh.level];
+  function ratio(v){return v===Infinity?"—":'<span class="num">'+(Math.round(v*100)/100)+'</span>'}
+  return '<div class="panel stack"><div class="row"><b>سلامة الصندوق من الديون</b><span class="badge '+lbl[1]+'">'+lbl[0]+'</span></div>'+
+    '<div class="kpis">'+
+    '<div class="kpi"><div class="k">الرفع المالي (الديون ÷ حقوق الملكية)</div><div class="v">'+(hh.de===Infinity?"—":pct(hh.de))+'</div><div class="s">الآمن 30٪ أو أقل</div></div>'+
+    '<div class="kpi"><div class="k">الديون ÷ الأصول</div><div class="v">'+pct(hh.da)+'</div><div class="s">كم من أصولكم ممول بالدين</div></div>'+
+    '<div class="kpi"><div class="k">مضاعف الرفع (الأصول ÷ حقوق الملكية)</div><div class="v">'+ratio(hh.lev)+'×</div><div class="s">1× يعني بلا ديون</div></div>'+
+    '<div class="kpi"><div class="k">تغطية ديون الثلاثين يوماً</div><div class="v">'+(hh.due30>0?ratio(hh.cover)+'×':'—')+'</div><div class="s">'+(hh.due30>0?"مستحق "+NF.format(hh.due30)+" ج.م":"لا شيء مستحق قريباً")+'</div></div></div>'+
+    (hh.over?'<div class="small" style="color:var(--bad);font-weight:600">'+hh.over+' التزام تجاوز موعد سداده.</div>':'')+'</div>';
+}
+function liabRow(o){var d=o.d;return '<button class="item'+(o.open?"":" closed")+'" data-act="open-liab" data-id="'+esc(d.id)+'"><div class="t">'+esc((LIAB_KINDS[d.lkind]||"التزام")+" — "+(d.creditor||""))+'</div><div class="a">'+(o.overdue?'<span class="badge bad">متأخر</span>':o.open?'<span class="badge warn">قائم</span>':'<span class="badge good">مسدد</span>')+'</div><div class="d">'+esc("الباقي "+NF.format(o.remaining)+" من "+NF.format(d.amount)+(d.due?" · يستحق "+fdate(d.due):""))+'</div><div class="prog"><div class="meter"><i style="width:'+(o.progress*100)+'%"></i></div></div></button>'}
+function vLiabs(c){
+  var open=c.liabs.filter(function(o){return o.open}).sort(function(a,b){return String(a.d.due||"9").localeCompare(String(b.d.due||"9"))}),done=c.liabs.filter(function(o){return !o.open});
+  var h='<h2 class="sec">ديون والتزامات الصندوق'+(isAdmin()?'<button class="chip" data-act="add-liab">+ التزام</button>':'')+'</h2>';
+  h+=healthCard(c);
+  if(!c.liabs.length)h+='<div class="empty" style="margin-top:10px"><p>لا ديون على الصندوق. سجّلوا هنا أي قرض أخذه الصندوق، أو كمبيالة، أو شراء بالحساب.</p></div>';
+  else h+='<div class="list" style="margin-top:10px">'+open.concat(done).map(liabRow).join("")+'</div>';
+  return h;
+}
+function openAddLiab(kind){
+  if(!isAdmin()){toast("تسجيل الالتزامات للمدير فقط");return}
+  kind=kind||(sheetState.kind==="liab-add"&&sheetState.lk)||"loan";sheetState={kind:"liab-add",lk:kind};
+  var cashDefault=kind==="loan";
+  openSheet('<h3>التزام على الصندوق</h3><div class="chips" role="group">'+Object.keys(LIAB_KINDS).map(function(k){return '<button type="button" class="chip" data-act="liab-kind" data-id="'+k+'" aria-pressed="'+(k===kind)+'">'+LIAB_KINDS[k]+'</button>'}).join("")+'</div>'+
+    '<form id="liabForm" class="stack" novalidate><div class="field"><label for="lb-cred">الدائن (لمن الدين)</label><input id="lb-cred" type="text" placeholder="اسم الشخص أو المحل"></div>'+
+    '<div class="grid2"><div class="field"><label for="lb-amount">المبلغ (ج.م)</label><input id="lb-amount" type="text" inputmode="decimal" autocomplete="off"></div><div class="field"><label for="lb-due">موعد السداد</label><input id="lb-due" type="date"></div></div>'+
+    (kind==="note"?'<div class="field"><label for="lb-ref">رقم الكمبيالة</label><input id="lb-ref" type="text"></div>':'')+
+    '<div class="field"><label for="lb-cash">ماذا أخذ الصندوق مقابل هذا الدين؟</label><select id="lb-cash"><option value="1"'+(cashDefault?" selected":"")+'>نقداً دخل الصندوق</option><option value="0"'+(cashDefault?"":" selected")+'>بضاعة أو غرض صار ملكاً للصندوق</option></select></div>'+
+    '<div class="field"><label for="lb-what">ما هو (اختياري)</label><input id="lb-what" type="text" placeholder="مثلاً: جهاز، بضاعة مشروع الحلويات"></div>'+
+    '<p class="small muted" style="margin:0">يُسجَّل الدين بمبلغه الثابت بلا فوائد، ولا يزيد بالتأخير.</p><div id="lbMsg"></div>'+
+    '<div class="btns"><button type="submit" class="btn" id="lbSubmit">تسجيل الالتزام</button><button type="button" class="btn ghost" data-act="close">إلغاء</button></div></form>');
+}
+async function submitLiab(ev){
+  ev.preventDefault();if(!isAdmin())return;
+  var cred=val("lb-cred").trim(),amount=r2(numv("lb-amount")),due=val("lb-due"),cash=val("lb-cash")==="1",what=val("lb-what").trim(),msg=$("#lbMsg");
+  function err(x){showMsg(msg,'<p class="err">'+esc(x)+'</p>');toast(x)}
+  if(!cred)return err("اكتب اسم الدائن.");if(!(amount>0))return err("اكتب مبلغاً أكبر من صفر.");
+  var b=$("#lbSubmit");b.disabled=true;
+  var dref=db.collection("deals").doc(),deal={kind:"liab",lkind:sheetState.lk,creditor:cred,amount:amount,due:due||"",cash:cash,what:what,ref:val("lb-ref").trim(),member:"",date:today(),by:S.email||null,createdAt:Date.now()};
+  var tref=db.collection("tx").doc();
+  unlockAudio();
+  var ok=await w(function(){return Promise.all([dref.set(deal),tref.set({type:"liab_open",deal:dref.id,member:"",amount:amount,cash:cash,date:today(),note:cred+(what?" · "+what:""),by:S.email||null,createdAt:Date.now()})])});
+  if(ok){closeSheet();showDone({title:"سُجّل الالتزام",amount:amount,sub:"للدائن "+cred})}else b.disabled=false;
+}
+function openLiab(id){
+  var d=S.deals.find(function(x){return x.id===id});if(!d)return;var o=liabStat(d),c=calc();sheetState={kind:"liab",id:id,confirm:false};
+  var h='<h3>'+esc(LIAB_KINDS[d.lkind]||"التزام")+'</h3><dl class="kv"><dt>الدائن</dt><dd>'+esc(d.creditor)+'</dd><dt>المبلغ</dt><dd>'+money(d.amount)+' ج.م</dd><dt>المسدد</dt><dd>'+money(o.paid)+'</dd><dt>الباقي</dt><dd><b>'+money(o.remaining)+'</b></dd>'+(d.due?'<dt>يستحق في</dt><dd>'+esc(fdate(d.due))+(o.overdue?' <span class="badge bad">متأخر</span>':'')+'</dd>':'')+(d.ref?'<dt>رقم الكمبيالة</dt><dd>'+esc(d.ref)+'</dd>':'')+'<dt>المقابل</dt><dd>'+(d.cash?"نقد دخل الصندوق":"غرض للصندوق")+(d.what?" · "+esc(d.what):"")+'</dd><dt>سُجّل في</dt><dd>'+esc(fdate(d.date))+'</dd></dl><div class="meter"><i style="width:'+(o.progress*100)+'%"></i></div>';
+  var pays=o.txs.filter(function(t){return t.type==="liab_pay"});if(pays.length)h+='<div class="list">'+pays.map(txRow).join("")+'</div>';
+  if(isAdmin()&&o.open)h+='<form id="liabPayForm" class="stack"><div class="field"><label for="lp-amount">مبلغ السداد</label><input id="lp-amount" type="text" inputmode="decimal" autocomplete="off" value="'+r2(o.remaining)+'"></div><p class="small muted" style="margin:0">النقد المتاح في الصندوق '+money(c.cash)+' ج.م.</p><div id="lpMsg"></div><button type="submit" class="btn block" id="lpSubmit">سداد من الصندوق</button></form>';
+  h+=isAdmin()?'<div class="btns"><button class="btn danger" data-act="del-liab">حذف الالتزام</button><button class="btn ghost" data-act="close">إغلاق</button></div>':'<button class="btn ghost block" data-act="close">إغلاق</button>';
+  openSheet(h);
+}
+async function submitLiabPay(ev){
+  ev.preventDefault();if(!isAdmin())return;var d=S.deals.find(function(x){return x.id===sheetState.id});if(!d)return;var o=liabStat(d),c=calc();
+  var amount=r2(numv("lp-amount")),msg=$("#lpMsg");function err(x){showMsg(msg,'<p class="err">'+esc(x)+'</p>');toast(x)}
+  if(!(amount>0))return err("اكتب مبلغاً صحيحاً.");if(amount>o.remaining+0.004)return err("الباقي "+NF.format(o.remaining)+" ج.م فقط.");if(amount>c.cash+0.004)return err("النقد في الصندوق "+NF.format(c.cash)+" ج.م فقط.");
+  $("#lpSubmit").disabled=true;unlockAudio();
+  var ok=await w(function(){return db.collection("tx").doc().set({type:"liab_pay",deal:d.id,member:"",amount:amount,date:today(),note:d.creditor,by:S.email||null,createdAt:Date.now()})});
+  if(ok){closeSheet();showDone({title:"سُدّد من الالتزام",amount:amount,sub:"للدائن "+d.creditor})}else $("#lpSubmit").disabled=false;
+}
+async function delLiab(){
+  if(!isAdmin())return;if(!sheetState.confirm){sheetState.confirm=true;document.querySelector('[data-act="del-liab"]').textContent="تأكيد حذف الالتزام وسداداته";return}
+  var id=sheetState.id,rel=S.tx.filter(function(t){return t.deal===id});
+  if(await w(function(){return Promise.all(rel.map(function(t){return db.doc("tx/"+t.id).delete()}).concat([db.doc("deals/"+id).delete()]))})){closeSheet();toast("حُذف الالتزام")}
+}
 function dealStat(d){
   var txs=S.tx.filter(function(t){return t.deal===d.id});
   var o={d:d,txs:txs,open:true,outCost:0,paid:0,total:0,remaining:0,progress:0};
@@ -297,14 +377,16 @@ function calc(){
   var cash=0,profit=0;
   S.tx.forEach(function(t){cash+=cashOf(t);profit+=(+t.profit||0);if(t.type==="transfer"){if(bal[t.member])bal[t.member].wd+=(+t.amount);if(bal[t.to])bal[t.to].dep+=(+t.amount)}if(bal[t.member]){if(t.type==="deposit")bal[t.member].dep+=(+t.amount);if(t.type==="withdraw")bal[t.member].wd+=(+t.amount)}});
   var distributed=0;S.dists.forEach(function(d){distributed+=(+d.total||0);var a=d.alloc||{};Object.keys(a).forEach(function(k){if(bal[k])bal[k].dist+=(+a[k])})});
-  var deals=S.deals.map(dealStat);
+  var deals=S.deals.filter(function(d){return d.kind!=="liab"}).map(dealStat);
+  var liabs=S.deals.filter(function(d){return d.kind==="liab"}).map(liabStat);
+  var L=liabs.reduce(function(s,o){return s+o.remaining},0),other=liabs.filter(function(o){return !o.d.cash}).reduce(function(s,o){return s+(+o.d.amount||0)},0);
   var recv=deals.reduce(function(s,o){return s+o.outCost},0);
   var members=sortedMembers().map(function(m){var b=bal[m.id];return {m:m,balance:r2(b.dep-b.wd+b.dist),dist:r2(b.dist)}});
   var sumBal=members.reduce(function(s,x){return s+x.balance},0);
   members.forEach(function(x){x.share=sumBal>0?x.balance/sumBal:0});
   var undist=r2(profit-distributed);
-  var equity=r2(sumBal+undist),assets=r2(cash+recv);
-  return {cash:r2(cash),recv:r2(recv),profit:r2(profit),distributed:r2(distributed),undist:undist,equity:equity,assets:assets,sumBal:r2(sumBal),members:members,deals:deals,diff:r2(assets-equity)};
+  var equity=r2(sumBal+undist),assets=r2(cash+recv+other);
+  return {cash:r2(cash),recv:r2(recv),profit:r2(profit),distributed:r2(distributed),undist:undist,equity:equity,assets:assets,sumBal:r2(sumBal),members:members,deals:deals,liabs:liabs,L:r2(L),other:r2(other),diff:r2(assets-L-equity)};
 }
 
 /* ---------- views ---------- */
@@ -386,17 +468,19 @@ function vFund(c){
      (Math.abs(c.undist)>=0.005?(isAdmin()?'<button class="btn" data-act="distribute">توزيع الأرباح</button>':'<div class="small muted">يوزّعها مدير الصندوق في يوم الحساب.</div>'):'')+'</div>';
   var ok=Math.abs(c.diff)<0.01;
   h+='<h2 class="sec">الميزان<span class="aside">الأصول = الالتزامات + حقوق الملكية</span></h2><div class="panel stack">'+
-     '<div class="check"><span class="badge '+(ok?"good":"bad")+'">'+(ok?"متوازن":"غير متوازن")+'</span><span class="eq">'+money(c.assets)+' = 0 + '+money(c.equity)+'</span></div>'+
-     '<div class="small muted">الأصول: نقد '+money(c.cash)+' + ما لدى الأعضاء بأصل الثمن '+money(c.recv)+'. حقوق الملكية: أرصدة الأعضاء '+money(c.sumBal)+' + ربح لم يوزع '+money(c.undist)+'.'+(ok?"":' الفرق '+money(c.diff)+'، راجع آخر العمليات.')+'</div></div>';
+     '<div class="check"><span class="badge '+(ok?"good":"bad")+'">'+(ok?"متوازن":"غير متوازن")+'</span><span class="eq">'+money(c.assets)+' = '+money(c.L)+' + '+money(c.equity)+'</span></div>'+
+     '<div class="small muted">الأصول: نقد '+money(c.cash)+' + ما لدى الأعضاء بأصل الثمن '+money(c.recv)+(c.other?' + أغراض للصندوق '+money(c.other):'')+'. الالتزامات: ديون على الصندوق '+money(c.L)+'. حقوق الملكية: أرصدة الأعضاء '+money(c.sumBal)+' + ربح لم يوزع '+money(c.undist)+'.'+(ok?"":' الفرق '+money(c.diff)+'، راجع آخر العمليات.')+'</div></div>';
   if(S.dists.length){
     var ds=S.dists.slice().sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
     h+='<h2 class="sec">سجل التوزيعات</h2><div class="list">'+ds.slice(0,6).map(function(d,i){return '<div class="item"><div class="t">توزيع '+money(d.total)+' ج.م</div><div class="a">'+(i===0&&isAdmin()?'<button class="chip" data-act="undo-dist" data-id="'+esc(d.id)+'">تراجع</button>':'')+'</div><div class="d">'+esc(fdate(d.date))+'</div></div>'}).join("")+'</div>';
   }
+  h+=vLiabs(c);
   h+=vDeals(c);
   return h;
 }
 
 function txRow(t){
+  if(t.type==="liab_open"||t.type==="liab_pay"){var lc=t.type==="liab_open"?(t.cash?1:0):-1;return '<button class="item" data-act="open-liab" data-id="'+esc(t.deal)+'"><div class="t">'+(t.type==="liab_open"?(t.cash?"دين دخل الصندوق":"شراء بالحساب"):"سداد دين")+'</div><div class="a '+(lc>0?"plus":lc<0?"minus":"")+'">'+(lc>0?"+":lc<0?"−":"")+money(t.amount)+'</div><div class="d">'+esc((t.note||"")+" · "+fdate(t.date))+'</div></button>'}
   if(t.type==="transfer"){var mi=myId(),dir=t.to===mi?1:t.member===mi?-1:0;
     return '<button class="item" data-act="open-tx" data-id="'+esc(t.id)+'"><div class="t">'+(dir>0?"تحويل وارد":dir<0?"تحويل صادر":"تحويل")+'</div><div class="a '+(dir>0?"plus":dir<0?"minus":"")+'">'+(dir>0?"+":dir<0?"−":"")+money(t.amount)+'</div><div class="d">'+esc(nameOf(t.member)+" ← "+nameOf(t.to))+' · '+esc(fdate(t.date))+(t.note?" · "+esc(t.note):"")+'</div></button>'}
   var cash=cashOf(t),sign=cash>=0?"plus":"minus";
@@ -529,6 +613,7 @@ function vStats(c){
     '<div class="kpi"><div class="k">العائد على رأس المال</div><div class="v">'+pct(roi)+'</div><div class="s">منذ أول عملية</div></div>'+
     '<div class="kpi"><div class="k">العقود الجارية</div><div class="v"><span class="num">'+open+'</span></div><div class="s">'+(late.length?'<span style="color:var(--warn);font-weight:600">'+late.length+' متأخر</span>':'لا تأخير')+'</div></div></div>';
   var es=equitySeries();
+  h+='<h2 class="sec">سلامة الصندوق</h2>'+healthCard(c);
   h+='<h2 class="sec">نمو الصندوق<span class="aside">ج.م</span></h2>'+lineChart("eq",es,[{k:"eq",l:"رصيد الصندوق",c:"var(--m1)"},{k:"cash",l:"النقد المتاح",c:"var(--cash)"}]);
   var mp=monthlyProfit();
   if(mp.some(function(p){return p.v.p}))h+='<h2 class="sec">الأرباح الشهرية<span class="aside">ج.م</span></h2>'+barChart("mp",mp,{k:"p",l:"الربح المحقق",c:"var(--m3)"});
@@ -773,7 +858,7 @@ function installCard(){
   var ua=navigator.userAgent||"",ios=/iPhone|iPad|iPod/.test(ua)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1),crios=/CriOS|FxiOS|EdgiOS/.test(ua);
   var h='<div class="install"><div class="row"><b>ثبّت الصندوق كتطبيق على شاشتك</b><button data-act="install-hide" aria-label="إخفاء">إخفاء</button></div>';
   if(DEFERRED_INSTALL)h+='<button class="btn" data-act="install">تثبيت التطبيق</button>';
-  else if(ios)h+='<ol><li>'+(crios?'اضغط زر المشاركة ⬆ بجانب شريط العنوان في الأعلى.':'اضغط زر المشاركة ⬆ في أسفل الشاشة. في iOS 26 اضغط أولاً على ⋯ ثم «مشاركة».')+'</li><li>مرّر القائمة إلى الأسفل واختر <b>«إضافة إلى الشاشة الرئيسية»</b>. إن لم تجده، اضغط «تعديل الإجراءات» في آخر القائمة وأضفه.</li><li>اضغط <b>«إضافة»</b>، وافتح الصندوق من أيقونته بعد ذلك.</li></ol><div class="small muted">إن فتحت الرابط من داخل واتساب أو تيليجرام أو Claude، افتحه أولاً في Safari، فالإضافة لا تظهر داخل هذه التطبيقات.</div>';
+  else if(ios)h+='<ol><li>'+(crios?'اضغط زر المشاركة ⬆ بجانب شريط العنوان في الأعلى.':'اضغط زر المشاركة ⬆ في أسفل الشاشة. في iOS 26 اضغط أولاً على ⋯ ثم «مشاركة».')+'</li><li>مرّر القائمة إلى الأسفل واختر <b>«إضافة إلى الشاشة الرئيسية»</b>. إن لم تجده، اضغط «تعديل الإجراءات» في آخر القائمة وأضفه.</li><li>اضغط <b>«إضافة»</b>، وافتح الصندوق من أيقونته بعد ذلك.</li></ol><div class="small muted">إن فتحت الرابط من داخل واتساب أو تيليجرام أو Claude، افتحه أولاً في Safari، فالإضافة لا تظهر داخل هذه التطبيقات.</div><div class="small"><b>طريقة بديلة مضمونة:</b> <a href="install.mobileconfig" style="color:var(--pine);font-weight:700">نزّل ملف التثبيت</a>، ثم افتح <b>الإعدادات</b> واضغط <b>«تم تنزيل ملف التعريف»</b> ثم <b>«تثبيت»</b>. ستظهر أيقونة البنك على شاشتك.</div>';
   else h+='<div class="small">من قائمة المتصفح ⋮ اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».</div>';
   return h+'</div>';
 }
@@ -950,6 +1035,10 @@ document.addEventListener("click",function(e){
     w(function(){return db.doc("members/"+id).update({uid:S.uid,email:S.email||""})}).then(function(ok){if(ok){S.tab="home";toast("أهلاً "+lm.name+"، هذا حسابك الآن")}});return}
   if(a==="transfer"){stopScan();return openTransfer()}
   if(a==="tilt")return enableTilt();
+  if(a==="add-liab")return openAddLiab();
+  if(a==="liab-kind")return openAddLiab(id);
+  if(a==="open-liab")return openLiab(id);
+  if(a==="del-liab")return delLiab();
   if(a==="statement")return openStatement();
   if(a==="stmt-month")return openStatement(id);
   if(a==="share-receipt")return shareReceipt();
@@ -977,6 +1066,8 @@ document.addEventListener("submit",function(e){
   if(id==="noteForm")return submitNote(e);
   if(id==="goalForm")return submitGoal(e);
   if(id==="trForm")return submitTransfer(e);
+  if(id==="liabForm")return submitLiab(e);
+  if(id==="liabPayForm")return submitLiabPay(e);
   if(id==="loginForm"){e.preventDefault();var b=$("#loginBtn");b.disabled=true;b.textContent="جارٍ الدخول…";
     signInWithEmailAndPassword(AUTH,val("l-email").trim(),val("l-pass")).catch(function(er){var c=er&&er.code;b.disabled=false;b.textContent="دخول";
       showMsg($("#loginMsg"),'<p class="err">'+(c==="auth/network-request-failed"?"لا يوجد اتصال بالإنترنت.":c==="auth/too-many-requests"?"محاولات كثيرة، انتظر قليلاً ثم حاول.":"البريد أو كلمة المرور غير صحيحين.")+'</p>')});}

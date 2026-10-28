@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PayloadContent</key>
+	<array>
+		<dict>
+			<key>FullScreen</key>
+			<true/>
+			<key>Icon</key>
+			<data>
+			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
+			OUAfkgPm9D8dkD8BZyPuqAAAAABJRU5ErkJggg==
+			</data>
+			<key>IsRemovable</key>
+			<true/>
+			<key>Label</key>
+			<string>بنك الثامر</string>
+			<key>PayloadDescription</key>
+			<string>أيقونة صندوق العائلة على الشاشة الرئيسية</string>
+			<key>PayloadDisplayName</key>
+			<string>بنك الثامر</string>
+			<key>PayloadIdentifier</key>
+			<string>io.github.abrahamthamer.bank.webclip</string>
+			<key>PayloadType</key>
+			<string>com.apple.webClip.managed</string>
+			<key>PayloadUUID</key>
+			<string>458818FC-6C4A-556C-B14E-97B7D9880B7D</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>Precomposed</key>
+			<true/>
+			<key>URL</key>
+			<string>https://abrahamthamer.github.io/Bank-of-Thamer/</string>
+		</dict>
+	</array>
+	<key>PayloadDescription</key>
+	<string>يضيف أيقونة صندوق العائلة إلى الشاشة الرئيسية ويفتحه بملء الشاشة. لا يغيّر أي إعداد آخر في الهاتف.</string>
+	<key>PayloadDisplayName</key>
+	<string>بنك الثامر — صندوق العائلة</string>
+	<key>PayloadIdentifier</key>
+	<string>io.github.abrahamthamer.bank</string>
+	<key>PayloadOrganization</key>
+	<string>صندوق العائلة</string>
+	<key>PayloadRemovalDisallowed</key>
+	<false/>
+	<key>PayloadType</key>
+	<string>Configuration</string>
+	<key>PayloadUUID</key>
+	<string>CB86B0FA-6366-5949-82CB-E3AEF0C3664C</string>
+	<key>PayloadVersion</key>
+	<integer>1</integer>
+</dict>
+</plist>
