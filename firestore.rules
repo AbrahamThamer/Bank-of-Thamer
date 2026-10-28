@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ضع هنا بريد كل فرد من العائلة كما أنشأته في Authentication
+    function isFamily() {
+      return request.auth != null && request.auth.token.email in [
+        'ibrahim@example.com',
+        'maryam@example.com',
+        'zainab@example.com'
+      ];
+    }
+    match /{col}/{id} {
+      allow read, write: if isFamily()
+        && col in ['members', 'tx', 'deals', 'dists', 'notes', 'receipts'];
+    }
+  }
+}
