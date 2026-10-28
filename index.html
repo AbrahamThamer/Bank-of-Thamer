@@ -227,6 +227,33 @@ nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:re
 .stmt-row .a{text-align:end;font-weight:700}
 .stmt-row .rb{text-align:end;font-size:12px;color:var(--muted)}
 .stmt-row.edge{font-weight:700;background:var(--sunk);padding-inline:10px;border-radius:10px;border:0}
+.donut-wrap{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;align-items:center}
+@media (max-width:360px){.donut-wrap{grid-template-columns:1fr;justify-items:center}}
+.donut-wrap svg{width:150px;height:150px;display:block}
+.donut-c1{font-size:15px;font-weight:700;fill:var(--ink);font-family:var(--f-body)}
+.donut-c2{font-size:9px;fill:var(--muted);font-family:var(--f-body)}
+.dleg{display:grid;gap:6px;font-size:13px;min-width:0}
+.dleg div{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:8px;align-items:center}
+.dleg i{width:10px;height:10px;border-radius:3px}
+.dleg b{font-variant-numeric:tabular-nums}
+.rings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ringbox{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px;display:grid;justify-items:center;gap:4px;text-align:center;font-size:12px;color:var(--muted)}
+.ringbox svg{width:96px;height:96px}
+.seg{display:inline-flex;background:var(--sunk);border-radius:12px;padding:3px;gap:3px}
+.seg button{border:0;background:none;padding:7px 12px;border-radius:9px;font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.motion{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px}
+.motion h4{margin:0;font-size:16px}
+.tally{display:flex;height:10px;border-radius:99px;overflow:hidden;background:var(--sunk);gap:2px}
+.tally span{display:block;height:100%}
+.votes3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.votes3 button{border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 4px;font-weight:600;font-size:14px;color:var(--ink)}
+.votes3 button[aria-pressed="true"].y{background:var(--good);color:#fff;border-color:var(--good)}
+.votes3 button[aria-pressed="true"].n{background:var(--bad);color:#fff;border-color:var(--bad)}
+.votes3 button[aria-pressed="true"].a{background:var(--muted);color:var(--bg);border-color:var(--muted)}
+.voters{display:flex;flex-wrap:wrap;gap:6px;font-size:12px}
+.voters span{background:var(--sunk);border-radius:99px;padding:2px 10px}
+.danger-zone{border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px}
 #toast{position:fixed;z-index:60;bottom:calc(84px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;max-width:calc(100% - 32px);text-align:center}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
 </style>
@@ -234,7 +261,7 @@ nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:re
 <body>
 <div id="app" dir="rtl" lang="ar">
   <header class="top">
-    <h1 class="brand">صندوق العائلة<small id="sub">دفتر مشترك بلا ربا · إصدار 7</small></h1>
+    <h1 class="brand">صندوق العائلة<small id="sub">دفتر مشترك بلا ربا · إصدار 8</small></h1>
     <button class="chip-link" data-act="logout" id="logoutBtn" hidden>خروج</button>
   </header>
   <main id="view"></main>
@@ -300,6 +327,13 @@ function health(c){
 }
 function healthCard(c){
   var hh=health(c),lbl={none:["بلا ديون","good"],safe:["آمن","good"],ok:["مقبول، انتبهوا","warn"],risk:["خطر","bad"]}[hh.level];
+  if(isPie()){var col=hh.level==="risk"?"var(--bad)":hh.level==="ok"?"var(--warn)":"var(--good)";
+    return '<div class="panel stack"><div class="row"><b>سلامة الصندوق من الديون</b><span class="badge '+lbl[1]+'">'+lbl[0]+'</span></div><div class="rings">'+
+      ring(hh.de===Infinity?1:hh.de,"الرفع المالي (الآمن 30٪ أو أقل)",col,hh.de===Infinity?"—":Math.round(hh.de*100)+"٪")+
+      ring(hh.da,"الديون ÷ الأصول",col,Math.round(hh.da*100)+"٪")+
+      ring(hh.lev>0?Math.min(1,(hh.lev-1)):0,"مضاعف الرفع (1× بلا ديون)","var(--m3)",(Math.round(hh.lev*100)/100)+"×")+
+      ring(hh.due30>0?Math.min(1,hh.cover/2):1,"تغطية ديون 30 يوماً","var(--m1)",hh.due30>0?(Math.round(hh.cover*100)/100)+"×":"—")+'</div>'+
+      (hh.over?'<div class="small" style="color:var(--bad);font-weight:600">'+hh.over+' التزام تجاوز موعد سداده.</div>':'')+'</div>'}
   function ratio(v){return v===Infinity?"—":'<span class="num">'+(Math.round(v*100)/100)+'</span>'}
   return '<div class="panel stack"><div class="row"><b>سلامة الصندوق من الديون</b><span class="badge '+lbl[1]+'">'+lbl[0]+'</span></div>'+
     '<div class="kpis">'+
@@ -310,6 +344,78 @@ function healthCard(c){
     (hh.over?'<div class="small" style="color:var(--bad);font-weight:600">'+hh.over+' التزام تجاوز موعد سداده.</div>':'')+'</div>';
 }
 function liabRow(o){var d=o.d;return '<button class="item'+(o.open?"":" closed")+'" data-act="open-liab" data-id="'+esc(d.id)+'"><div class="t">'+esc((LIAB_KINDS[d.lkind]||"التزام")+" — "+(d.creditor||""))+'</div><div class="a">'+(o.overdue?'<span class="badge bad">متأخر</span>':o.open?'<span class="badge warn">قائم</span>':'<span class="badge good">مسدد</span>')+'</div><div class="d">'+esc("الباقي "+NF.format(o.remaining)+" من "+NF.format(d.amount)+(d.due?" · يستحق "+fdate(d.due):""))+'</div><div class="prog"><div class="meter"><i style="width:'+(o.progress*100)+'%"></i></div></div></button>'}
+function motions(){return S.notes.filter(function(n){return n.kind==="motion"})}
+function motionState(m){
+  var total=S.members.length,v=m.votes||{},ids=S.members.map(function(x){return x.id}),yes=0,no=0,ab=0;
+  ids.forEach(function(id){if(v[id]==="yes")yes++;else if(v[id]==="no")no++;else if(v[id]==="abstain")ab++});
+  var voted=yes+no+ab,need=m.mtype==="charter"?total:Math.floor(total/2)+1;
+  var passedNow=yes>=need,deadNow=m.mtype==="charter"?no>0||ab>0:(no+ab)>total-need;
+  var expired=m.deadline&&m.deadline<today();
+  var closed=!!m.closed||voted>=total||expired||passedNow||deadNow;
+  var result=m.closed?m.result:passedNow?"passed":"rejected";
+  return {yes:yes,no:no,ab:ab,voted:voted,total:total,need:need,closed:closed,result:closed?result:null};
+}
+function assemblyCard(){
+  var open=motions().filter(function(m){return !motionState(m).closed}).length;
+  return '<div class="panel row" style="margin-top:12px"><div><b>الجمعية العمومية</b><div class="small muted">'+(open?open+" تصويت مفتوح":"لا تصويت مفتوح الآن")+'</div></div><button class="btn'+(open?"":" ghost")+'" data-tab="assembly">'+(open?"صوّت الآن":"ادخل")+'</button></div>';
+}
+function myPendingVotes(){var mi=myId();if(!mi)return "";var n=motions().filter(function(m){return !motionState(m).closed&&!(m.votes||{})[mi]}).length;
+  return n?'<div class="callout" style="margin-top:12px"><div class="small"><b>الجمعية العمومية:</b> '+n+' قرار ينتظر صوتك.</div><button class="btn" data-tab="assembly">صوّت الآن</button></div>':""}
+function motionCard(m){
+  var st=motionState(m),mi=myId(),my=(m.votes||{})[mi],v=m.votes||{};
+  var h='<div class="motion"><div class="row"><h4>'+esc(m.title)+'</h4>'+(st.closed?'<span class="badge '+(st.result==="passed"?"good":"bad")+'">'+(st.result==="passed"?"أُقِرّ":"رُفض")+'</span>':'<span class="badge warn">مفتوح</span>')+'</div>';
+  if(m.text)h+='<div class="small" style="white-space:pre-wrap">'+esc(m.text)+'</div>';
+  h+='<div class="small muted">'+(m.mtype==="charter"?"قرار كبير: يحتاج الإجماع":"قرار عادي: يحتاج "+st.need+" من "+st.total)+' · اقترحه '+esc(nameOf(m.member))+(m.deadline?' · ينتهي '+esc(fdate(m.deadline)):'')+'</div>';
+  h+='<div class="tally" aria-hidden="true">'+(st.yes?'<span style="flex:'+st.yes+';background:var(--good)"></span>':'')+(st.no?'<span style="flex:'+st.no+';background:var(--bad)"></span>':'')+(st.ab?'<span style="flex:'+st.ab+';background:var(--muted)"></span>':'')+(st.total-st.voted>0?'<span style="flex:'+(st.total-st.voted)+';background:var(--sunk)"></span>':'')+'</div>';
+  h+='<div class="small">نعم <b>'+st.yes+'</b> · لا <b>'+st.no+'</b> · ممتنع <b>'+st.ab+'</b> · لم يصوّت <b>'+(st.total-st.voted)+'</b></div>';
+  h+='<div class="voters">'+sortedMembers().map(function(x){var vv=v[x.id];return '<span>'+esc(x.name)+': '+(vv==="yes"?"نعم":vv==="no"?"لا":vv==="abstain"?"ممتنع":"—")+'</span>'}).join("")+'</div>';
+  if(!st.closed&&mi)h+='<div class="votes3"><button class="y" data-act="vote" data-id="'+esc(m.id)+'" data-v="yes" aria-pressed="'+(my==="yes")+'">نعم</button><button class="n" data-act="vote" data-id="'+esc(m.id)+'" data-v="no" aria-pressed="'+(my==="no")+'">لا</button><button class="a" data-act="vote" data-id="'+esc(m.id)+'" data-v="abstain" aria-pressed="'+(my==="abstain")+'">ممتنع</button></div>';
+  if(st.closed&&m.closedAt)h+='<div class="small muted">المحضر: أُغلق التصويت في '+esc(fdate(m.closedAt))+(m.minutes?' · '+esc(m.minutes):'')+'</div>';
+  if(isAdmin())h+='<div class="btns">'+(!m.closed?'<button class="btn ghost" data-act="close-motion" data-id="'+esc(m.id)+'">'+(st.closed?"حفظ المحضر":"إقفال التصويت")+'</button>':'')+'<button class="btn danger" data-act="del-motion" data-id="'+esc(m.id)+'">حذف</button></div>';
+  return h+'</div>';
+}
+function vAssembly(c){
+  var all=motions().sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)}),open=all.filter(function(m){return !motionState(m).closed}),done=all.filter(function(m){return motionState(m).closed});
+  var h='<h2 class="sec">الجمعية العمومية'+(myMember()?'<button class="chip" data-act="add-motion">+ اقتراح</button>':'')+'</h2><p class="small muted" style="margin:0 0 10px">صوت واحد لكل عضو مهما كانت حصته. القرار العادي يحتاج أغلبية الأعضاء، والقرار الكبير مثل تعديل الميثاق يحتاج الإجماع.</p>';
+  h+=open.length?'<div class="stack">'+open.map(motionCard).join("")+'</div>':'<div class="empty"><p>لا قرارات مطروحة. اقترح قراراً ليصوّت عليه الجميع، مثل تغيير نسبة الاحتياطي أو بدء مشروع.</p></div>';
+  if(done.length)h+='<h2 class="sec">سجل القرارات</h2><div class="stack">'+done.map(motionCard).join("")+'</div>';
+  return h+'<button class="btn ghost block" style="margin-top:14px" data-tab="fund">رجوع إلى الصندوق</button>';
+}
+function openAddMotion(){
+  if(!myMember()){toast("اربط حسابك أولاً");return}sheetState={kind:"motion-add"};
+  var d=new Date();d.setDate(d.getDate()+3);var dd=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  openSheet('<h3>اقتراح قرار</h3><form id="motionForm" class="stack" novalidate><div class="field"><label for="mo-title">القرار المقترح</label><input id="mo-title" type="text" placeholder="مثلاً: رفع الاحتياطي إلى 25٪"></div><div class="field"><label for="mo-text">التفاصيل والأسباب</label><textarea id="mo-text"></textarea></div><div class="grid2"><div class="field"><label for="mo-type">نوع القرار</label><select id="mo-type"><option value="ordinary">عادي: بالأغلبية</option><option value="charter">كبير: بالإجماع</option></select></div><div class="field"><label for="mo-dl">آخر موعد للتصويت</label><input id="mo-dl" type="date" value="'+dd+'"></div></div><div id="moMsg"></div><div class="btns"><button type="submit" class="btn">طرح للتصويت</button><button type="button" class="btn ghost" data-act="close">إلغاء</button></div></form>');
+}
+async function submitMotion(ev){ev.preventDefault();var t=val("mo-title").trim();if(!t){showMsg($("#moMsg"),'<p class="err">اكتب القرار المقترح.</p>');return}
+  var doc={kind:"motion",title:t,text:val("mo-text").trim(),mtype:val("mo-type"),deadline:val("mo-dl"),member:myId(),votes:{},closed:false,by:S.email||null,createdAt:Date.now()};
+  if(await w(function(){return db.collection("notes").doc().set(doc)})){closeSheet();S.tab="assembly";render();toast("طُرح القرار للتصويت")}}
+function castVote(id,v){var mi=myId(),m=S.notes.find(function(x){return x.id===id});if(!mi||!m)return;if(motionState(m).closed){toast("أُغلق التصويت");return}
+  var u={};u["votes."+mi]=v;w(function(){return db.doc("notes/"+id).update(u)}).then(function(ok){if(ok)toast("سُجّل صوتك")})}
+function closeMotion(id){if(!isAdmin())return;var m=S.notes.find(function(x){return x.id===id});if(!m)return;var st=motionState(m);
+  var res=st.yes>=st.need?"passed":"rejected";
+  w(function(){return db.doc("notes/"+id).update({closed:true,result:res,closedAt:today(),minutes:"نعم "+st.yes+"، لا "+st.no+"، ممتنع "+st.ab+" من "+st.total})}).then(function(ok){if(ok)toast(res==="passed"?"أُقِرّ القرار":"رُفض القرار")})}
+
+/* ---------- reset & backup ---------- */
+function dangerZone(){if(!isAdmin())return "";return '<h2 class="sec">إدارة البيانات</h2><div class="danger-zone"><div class="small">احفظ نسخة من كل بيانات الصندوق في ملف على جهازك، أو أعد الصندوق إلى البداية.</div><div class="btns"><button class="btn ghost" data-act="backup">تنزيل نسخة احتياطية</button><button class="btn danger" data-act="reset-open">تصفير الصندوق</button></div></div>'}
+function backup(){
+  var data={exportedAt:new Date().toISOString(),version:8,settings:S.settings,members:S.members,tx:S.tx,deals:S.deals,dists:S.dists,notes:S.notes};
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download="bank-of-thamer-"+today()+".json";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(u);a.remove()},2000);toast("نُزّلت النسخة الاحتياطية");
+}
+function openReset(){
+  if(!isAdmin())return;sheetState={kind:"reset"};
+  openSheet('<h3>تصفير الصندوق</h3><p style="margin:0">سيُحذف نهائياً: كل العمليات والعقود والالتزامات والتوزيعات والأهداف والملاحظات وقرارات الجمعية وصور الفواتير، وتعود كل الأرصدة والعدادات إلى الصفر.</p><p class="small muted" style="margin:0">ننصح بتنزيل نسخة احتياطية قبل التصفير.</p><button class="btn ghost block" data-act="backup">تنزيل نسخة احتياطية أولاً</button>'+
+   '<form id="resetForm" class="stack" novalidate><label class="row small" style="justify-content:flex-start;gap:8px"><input type="checkbox" id="rs-members"> احذف الأعضاء وروابط حساباتهم أيضاً</label><div class="field"><label for="rs-confirm">للتأكيد اكتب كلمة: تصفير</label><input id="rs-confirm" type="text" autocomplete="off"></div><div id="rsMsg"></div><div class="btns"><button type="submit" class="btn danger" id="rsSubmit">تصفير كل شيء</button><button type="button" class="btn ghost" data-act="close">إلغاء</button></div></form>');
+}
+async function submitReset(ev){
+  ev.preventDefault();if(!isAdmin())return;
+  if(val("rs-confirm").trim()!=="تصفير"){showMsg($("#rsMsg"),'<p class="err">اكتب كلمة «تصفير» كما هي.</p>');return}
+  var b=$("#rsSubmit");b.disabled=true;b.textContent="جارٍ التصفير…";
+  var ops=[];S.tx.forEach(function(t){ops.push(db.doc("tx/"+t.id).delete());if(t.receipt)ops.push(db.doc("receipts/"+t.receipt).delete())});
+  S.deals.forEach(function(d){ops.push(db.doc("deals/"+d.id).delete())});S.dists.forEach(function(d){ops.push(db.doc("dists/"+d.id).delete())});S.notes.forEach(function(n){ops.push(db.doc("notes/"+n.id).delete())});
+  if($("#rs-members").checked)S.members.forEach(function(m){ops.push(db.doc("members/"+m.id).delete())});
+  if(await w(function(){return Promise.all(ops)})){closeSheet();S.tab="home";render();window.scrollTo(0,0);toast("عاد الصندوق إلى الصفر")}else{b.disabled=false;b.textContent="تصفير كل شيء"}
+}
+
 function vLiabs(c){
   var open=c.liabs.filter(function(o){return o.open}).sort(function(a,b){return String(a.d.due||"9").localeCompare(String(b.d.due||"9"))}),done=c.liabs.filter(function(o){return !o.open});
   var h='<h2 class="sec">ديون والتزامات الصندوق'+(isAdmin()?'<button class="chip" data-act="add-liab">+ التزام</button>':'')+'</h2>';
@@ -391,7 +497,7 @@ function calc(){
 
 /* ---------- views ---------- */
 function render(){
-  document.querySelectorAll(".tab[data-tab]").forEach(function(b){b.setAttribute("aria-current",b.dataset.tab===S.tab?"page":"false")});
+  document.querySelectorAll(".tab[data-tab]").forEach(function(b){b.setAttribute("aria-current",(b.dataset.tab===S.tab||(S.tab==="assembly"&&b.dataset.tab==="fund"))?"page":"false")});
   var v=$("#view");
   $("#nav").hidden=!S.authed;$("#logoutBtn").hidden=!S.authed;
   if(S.setup){v.innerHTML='<div class="empty" style="margin-top:20px"><p>لم يُضبط الاتصال بقاعدة البيانات بعد. افتح ملف config.js وضع فيه بيانات مشروع Firebase كما في ملف الشرح.</p></div>';return}
@@ -400,7 +506,7 @@ function render(){
   if(!loaded()){v.innerHTML='<div class="empty" style="margin-top:20px"><p>جارٍ فتح الدفتر…</p></div>';return}
   var c=calc(),me=myMember();
   if(!me&&!S.browse){$("#nav").hidden=true;v.innerHTML=(S.denied?vDenied():"")+vLink();return}
-  v.innerHTML=(S.denied?vDenied():"")+(S.tab==="fund"?vFund(c):S.tab==="ledger"?vLedger(c):S.tab==="stats"?(vStats(c)+vPlans()):(me?vMine(c):vFund(c)));
+  v.innerHTML=(S.denied?vDenied():"")+(S.tab==="assembly"?vAssembly(c):S.tab==="fund"?vFund(c):S.tab==="ledger"?vLedger(c):S.tab==="stats"?(vStats(c)+vPlans()):(me?vMine(c):vFund(c)));
 }
 
 function vDenied(){
@@ -441,7 +547,7 @@ function vMine(c){
     '<div><div class="lbl">رصيدك</div><div class="big">'+money(x.balance)+'<span class="cur">ج.م</span></div></div>'+
     '<div class="foot"><div><div class="lbl">صاحب الحساب</div><div class="holder">'+esc(me.name)+'</div></div><div style="text-align:end"><div class="lbl">رقم الحساب</div><div class="holder num">•••• '+acctNo(me)+'</div></div></div><div class="shine"></div></section></div>'+
     '<div class="card-sub"><span class="muted">حصتك من الصندوق <b style="color:var(--ink)">'+pct(x.share)+'</b>'+(isAdmin()?' · المدير':'')+'</span><button class="chip" data-act="statement">كشف حساب</button></div>';
-  h+='<div class="money-btns"><button class="btn" data-act="transfer">تحويل</button><button class="btn ghost" data-act="receive">استلام برمز QR</button></div>';
+  h+=myPendingVotes();h+='<div class="money-btns"><button class="btn" data-act="transfer">تحويل</button><button class="btn ghost" data-act="receive">استلام برمز QR</button></div>';
   h+='<div class="acts">'+actBtn("deposit","إيداع",'<path d="M12 4v12M7 11l5 5 5-5M5 20h14"/>')+actBtn("withdraw","سحب",'<path d="M12 20V8M7 13l5-5 5 5M5 4h14"/>')+
     actBtn("murabaha","شراء بالتقسيط",'<path d="M5 7h14l-1.5 9h-11z"/><path d="M9 7a3 3 0 0 1 6 0"/>')+actBtn("qard","قرض حسن",'<path d="M4 12h16M12 4v16"/><circle cx="12" cy="12" r="9"/>')+actBtn("mudaraba","مشروع",'<path d="M4 18l5-6 4 3 7-9"/><path d="M15 6h5v5"/>')+'</div>';
   h+='<div class="kpis" style="margin-top:12px"><div class="kpi"><div class="k">عليك للصندوق</div><div class="v">'+money(owed)+'</div><div class="s">أقساط وقروض باقية</div></div>'+
@@ -459,7 +565,7 @@ function vFund(c){
      '<div class="meter'+(reserveOk?"":" warn")+'"><i style="width:'+(reserveNeed>0?Math.min(100,c.cash/reserveNeed*100):100)+'%"></i></div>'+
      '<div class="row small muted"><span>المتاح '+money(c.cash)+'</span><span>المطلوب '+money(reserveNeed)+'</span></div></div>';
   h+='<h2 class="sec">الحسابات والحصص'+(isAdmin()?'<button class="chip" data-act="add-member">+ حساب</button>':'')+'</h2><div class="panel">';
-  h+='<div class="shares" aria-hidden="true">'+c.members.filter(function(x){return x.share>0}).map(function(x){return '<span style="flex:'+x.share+';background:'+colorOf(x.m.id)+'"></span>'}).join("")+'</div>';
+  if(isPie())h+='</div>'+donut(c.members.map(function(x){return {label:x.m.name,value:Math.max(0,x.balance),color:colorOf(x.m.id)}}),NF.format(c.sumBal),"أرصدة الأعضاء")+'<div class="panel" style="margin-top:8px">';else h+='<div class="shares" aria-hidden="true">'+c.members.filter(function(x){return x.share>0}).map(function(x){return '<span style="flex:'+x.share+';background:'+colorOf(x.m.id)+'"></span>'}).join("")+'</div>';
   h+=c.members.map(function(x){return '<button class="member" data-act="open-member" data-id="'+esc(x.m.id)+'"><span class="dot" style="background:'+colorOf(x.m.id)+'"></span><div><div class="nm">'+esc(x.m.name)+(x.m.uid&&x.m.uid===S.uid?'<span class="you">أنت</span>':'')+'</div><div class="sub">حساب <span class="num">'+acctNo(x.m)+'</span> · حصته '+pct(x.share)+(x.m.uid?'':' · غير مربوط')+'</div></div><div class="bal"><b>'+money(x.balance)+'</b><div class="sub">ج.م</div></div></button>'}).join("")+'</div>';
   if(!S.settings||!S.settings.adminUid)h+='<div class="callout" style="margin-top:12px"><div class="small"><b>حدّد مدير الصندوق.</b> المدير وحده يستطيع حذف الأعضاء. اضغط الزر من حساب إبراهيم.</div><button class="btn" data-act="claim-admin">اجعل حسابي مدير الصندوق</button></div>';
   var ad=accountDay(),isAD=isAccountDay();
@@ -474,8 +580,10 @@ function vFund(c){
     var ds=S.dists.slice().sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
     h+='<h2 class="sec">سجل التوزيعات</h2><div class="list">'+ds.slice(0,6).map(function(d,i){return '<div class="item"><div class="t">توزيع '+money(d.total)+' ج.م</div><div class="a">'+(i===0&&isAdmin()?'<button class="chip" data-act="undo-dist" data-id="'+esc(d.id)+'">تراجع</button>':'')+'</div><div class="d">'+esc(fdate(d.date))+'</div></div>'}).join("")+'</div>';
   }
+  h=assemblyCard()+h;
   h+=vLiabs(c);
   h+=vDeals(c);
+  h+=dangerZone();
   return h;
 }
 
@@ -516,7 +624,7 @@ function vDeals(c){
 
 function vPlans(){
   var goals=S.notes.filter(function(n){return n.kind==="goal"}).sort(function(a,b){return (a.done?1:0)-(b.done?1:0)||(b.createdAt||0)-(a.createdAt||0)});
-  var notes=S.notes.filter(function(n){return n.kind!=="goal"}).sort(function(a,b){return (a.done?1:0)-(b.done?1:0)||(b.createdAt||0)-(a.createdAt||0)});
+  var notes=S.notes.filter(function(n){return n.kind!=="goal"&&n.kind!=="motion"}).sort(function(a,b){return (a.done?1:0)-(b.done?1:0)||(b.createdAt||0)-(a.createdAt||0)});
   var h='<h2 class="sec">الأهداف<button class="chip" data-act="add-note" data-type="goal">+ هدف</button></h2>';
   h+=goals.length?'<div class="list">'+goals.map(function(g){var p=g.target>0?Math.min(1,(+g.current||0)/g.target):0;return '<button class="item'+(p>=1?" closed":"")+'" data-act="open-note" data-id="'+esc(g.id)+'"><div class="t">'+esc(g.title)+'</div><div class="a">'+pct(p)+'</div><div class="d">'+NF.format(+g.current||0)+' من '+NF.format(+g.target||0)+' ج.م'+(g.member?" · "+esc(nameOf(g.member)):"")+'</div><div class="prog"><div class="meter"><i style="width:'+(p*100)+'%"></i></div></div></button>'}).join("")+'</div>'
     :'<div class="empty"><p>هدف ادخار مثل «حاسوب لإبراهيم» أو «رأس مال أول مشروع»، بمبلغ مستهدف وتقدّم يُحدَّث.</p></div>';
@@ -527,6 +635,21 @@ function vPlans(){
 }
 
 /* ---------- statistics ---------- */
+var CHART_MODE="bars";try{CHART_MODE=localStorage.getItem("bot-charts")||"bars"}catch(e){}
+function isPie(){return CHART_MODE==="pie"}
+function modeToggle(){return '<div class="seg" role="group" aria-label="شكل الرسوم"><button data-act="chart-mode" data-id="bars" aria-pressed="'+!isPie()+'">أعمدة وخطوط</button><button data-act="chart-mode" data-id="pie" aria-pressed="'+isPie()+'">دوائر</button></div>'}
+var PIE_COLORS=["var(--m1)","var(--m2)","var(--m3)","var(--m4)","var(--m5)"];
+function donut(items,center,sub){
+  items=items.filter(function(x){return x.value>0.004});var tot=items.reduce(function(s,x){return s+x.value},0);
+  if(!(tot>0))return '<div class="empty"><p>لا أرقام تُعرض بعد.</p></div>';
+  var R=58,C=2*Math.PI*R,acc=0,gap=items.length>1?2:0;
+  var arcs=items.map(function(x,i){var len=x.value/tot*C,seg='<circle cx="75" cy="75" r="'+R+'" fill="none" stroke="'+(x.color||PIE_COLORS[i%5])+'" stroke-width="24" stroke-dasharray="'+Math.max(0,len-gap).toFixed(2)+' '+(C-Math.max(0,len-gap)).toFixed(2)+'" stroke-dashoffset="'+(-acc).toFixed(2)+'" transform="rotate(-90 75 75)"><title>'+esc(x.label)+': '+NF.format(r2(x.value))+'</title></circle>';acc+=len;return seg}).join("");
+  var svg='<svg viewBox="0 0 150 150" role="img" aria-label="'+esc(items.map(function(x){return x.label}).join("، "))+'"><circle cx="75" cy="75" r="'+R+'" fill="none" stroke="var(--sunk)" stroke-width="24"/>'+arcs+'<text x="75" y="76" text-anchor="middle" class="donut-c1">'+esc(center||"")+'</text><text x="75" y="92" text-anchor="middle" class="donut-c2">'+esc(sub||"")+'</text></svg>';
+  var leg='<div class="dleg">'+items.map(function(x,i){return '<div><i style="background:'+(x.color||PIE_COLORS[i%5])+'"></i><span>'+esc(x.label)+'</span><b>'+NF.format(r2(x.value))+' · '+(Math.round(x.value/tot*1000)/10)+'٪</b></div>'}).join("")+'</div>';
+  return '<div class="panel donut-wrap" dir="rtl">'+svg+leg+'</div>';
+}
+function ring(frac,label,color,txt){var R=36,C=2*Math.PI*R,f=Math.max(0,Math.min(1,frac||0));
+  return '<div class="ringbox"><svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="'+R+'" fill="none" stroke="var(--sunk)" stroke-width="10"/><circle cx="48" cy="48" r="'+R+'" fill="none" stroke="'+color+'" stroke-width="10" stroke-linecap="round" stroke-dasharray="'+(f*C).toFixed(2)+' '+C.toFixed(2)+'" transform="rotate(-90 48 48)"/><text x="48" y="53" text-anchor="middle" class="donut-c1">'+esc(txt)+'</text></svg><span>'+esc(label)+'</span></div>'}
 var CH={};
 var CF=new Intl.NumberFormat("en-US",{notation:"compact",maximumFractionDigits:1});
 function niceStep(x){if(!(x>0))return 1;var p=Math.pow(10,Math.floor(Math.log10(x))),n=x/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p}
@@ -612,8 +735,19 @@ function vStats(c){
     '<div class="kpi"><div class="k">الأرباح المحققة</div><div class="v">'+money(c.profit)+'</div><div class="s">موزّع منها '+NF.format(c.distributed)+'</div></div>'+
     '<div class="kpi"><div class="k">العائد على رأس المال</div><div class="v">'+pct(roi)+'</div><div class="s">منذ أول عملية</div></div>'+
     '<div class="kpi"><div class="k">العقود الجارية</div><div class="v"><span class="num">'+open+'</span></div><div class="s">'+(late.length?'<span style="color:var(--warn);font-weight:600">'+late.length+' متأخر</span>':'لا تأخير')+'</div></div></div>';
+  h='<div class="row" style="margin-top:12px"><span class="small muted">شكل الرسوم</span>'+modeToggle()+'</div>'+h;
   var es=equitySeries();
   h+='<h2 class="sec">سلامة الصندوق</h2>'+healthCard(c);
+  if(isPie()){
+    h+='<h2 class="sec">تكوين أصول الصندوق<span class="aside">ج.م</span></h2>'+donut([{label:"نقد متاح",value:c.cash},{label:"لدى الأعضاء",value:c.recv},{label:"أغراض للصندوق",value:c.other}],NF.format(c.assets),"مجموع الأصول");
+    h+='<h2 class="sec">من يموّل الصندوق</h2>'+donut([{label:"حقوق الأعضاء",value:c.equity,color:"var(--m1)"},{label:"ديون على الصندوق",value:c.L,color:"var(--m2)"}],NF.format(c.assets),"الأصول");
+    var mpp=monthlyProfit().filter(function(p){return p.v.p>0});
+    h+='<h2 class="sec">الأرباح حسب الشهر</h2>'+donut(mpp.map(function(p){return {label:p.label,value:p.v.p}}),NF.format(c.profit),"مجموع الأرباح");
+    h+='<h2 class="sec">حصص الأعضاء</h2>'+donut(c.members.map(function(x){return {label:x.m.name,value:Math.max(0,x.balance),color:colorOf(x.m.id)}}),NF.format(c.sumBal),"أرصدة الأعضاء");
+    h+='<h2 class="sec">مصادر الربح</h2>'+donut([{label:"المرابحة",value:src.murabaha,color:"var(--m1)"},{label:"المضاربة",value:src.mudaraba,color:"var(--m2)"}],NF.format(src.murabaha+src.mudaraba),"ج.م");
+    h+='<h2 class="sec">تنبيهات السداد</h2><div class="panel">'+(late.length?late.map(function(a){return '<div class="alert"><span class="badge warn">متأخر</span><div><b>'+esc(nameOf(a.who))+'</b><div class="small muted">'+esc(a.txt)+'</div></div></div>'}).join(""):'<p class="small muted" style="margin:0">كل الأقساط والقروض في مواعيدها.</p>')+'</div>';
+    return h;
+  }
   h+='<h2 class="sec">نمو الصندوق<span class="aside">ج.م</span></h2>'+lineChart("eq",es,[{k:"eq",l:"رصيد الصندوق",c:"var(--m1)"},{k:"cash",l:"النقد المتاح",c:"var(--cash)"}]);
   var mp=monthlyProfit();
   if(mp.some(function(p){return p.v.p}))h+='<h2 class="sec">الأرباح الشهرية<span class="aside">ج.م</span></h2>'+barChart("mp",mp,{k:"p",l:"الربح المحقق",c:"var(--m3)"});
@@ -1036,6 +1170,13 @@ document.addEventListener("click",function(e){
   if(a==="transfer"){stopScan();return openTransfer()}
   if(a==="tilt")return enableTilt();
   if(a==="add-liab")return openAddLiab();
+  if(a==="chart-mode"){CHART_MODE=id;try{localStorage.setItem("bot-charts",id)}catch(er){}return render()}
+  if(a==="add-motion")return openAddMotion();
+  if(a==="vote")return castVote(id,el.dataset.v);
+  if(a==="close-motion")return closeMotion(id);
+  if(a==="del-motion"){if(!isAdmin())return;if(el.dataset.sure!=="1"){el.dataset.sure="1";el.textContent="تأكيد الحذف";return}w(function(){return db.doc("notes/"+id).delete()}).then(function(ok){if(ok)toast("حُذف القرار")});return}
+  if(a==="backup")return backup();
+  if(a==="reset-open")return openReset();
   if(a==="liab-kind")return openAddLiab(id);
   if(a==="open-liab")return openLiab(id);
   if(a==="del-liab")return delLiab();
@@ -1067,6 +1208,8 @@ document.addEventListener("submit",function(e){
   if(id==="goalForm")return submitGoal(e);
   if(id==="trForm")return submitTransfer(e);
   if(id==="liabForm")return submitLiab(e);
+  if(id==="motionForm")return submitMotion(e);
+  if(id==="resetForm")return submitReset(e);
   if(id==="liabPayForm")return submitLiabPay(e);
   if(id==="loginForm"){e.preventDefault();var b=$("#loginBtn");b.disabled=true;b.textContent="جارٍ الدخول…";
     signInWithEmailAndPassword(AUTH,val("l-email").trim(),val("l-pass")).catch(function(er){var c=er&&er.code;b.disabled=false;b.textContent="دخول";

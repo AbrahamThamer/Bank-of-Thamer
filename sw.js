@@ -1,5 +1,5 @@
 // يحفظ ملفات الواجهة لتفتح الصفحة بسرعة. البيانات نفسها تتزامن عبر Firebase.
-const CACHE = "family-fund-v7";
+const CACHE = "family-fund-v8";
 const SHELL = ["./", "index.html", "config.js", "manifest.webmanifest", "lib/qrgen.js"];
 self.addEventListener("install", e => {
   // كل ملف على حدة، فلا يفشل التثبيت إن نقص ملف
